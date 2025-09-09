@@ -136,6 +136,39 @@
                             <i class="fas fa-underline"></i>
                         </button>
                         <div class="tool-separator"></div>
+                        <button class="tool-btn" id="formatH1Btn" title="Heading 1">
+                            <i class="fas fa-heading"></i>1
+                        </button>
+                        <button class="tool-btn" id="formatH2Btn" title="Heading 2">
+                            <i class="fas fa-heading"></i>2
+                        </button>
+                        <button class="tool-btn" id="formatH3Btn" title="Heading 3">
+                            <i class="fas fa-heading"></i>3
+                        </button>
+                        <div class="tool-separator"></div>
+                        <button class="tool-btn" id="insertUnorderedListBtn" title="Unordered List">
+                            <i class="fas fa-list-ul"></i>
+                        </button>
+                        <button class="tool-btn" id="insertOrderedListBtn" title="Ordered List">
+                            <i class="fas fa-list-ol"></i>
+                        </button>
+                        <button class="tool-btn" id="formatBlockquoteBtn" title="Blockquote">
+                            <i class="fas fa-quote-right"></i>
+                        </button>
+                        <div class="tool-separator"></div>
+                        <button class="tool-btn" id="alignLeftBtn" title="Align Left">
+                            <i class="fas fa-align-left"></i>
+                        </button>
+                        <button class="tool-btn" id="alignCenterBtn" title="Align Center">
+                            <i class="fas fa-align-center"></i>
+                        </button>
+                        <button class="tool-btn" id="alignRightBtn" title="Align Right">
+                            <i class="fas fa-align-right"></i>
+                        </button>
+                        <button class="tool-btn" id="alignJustifyBtn" title="Justify">
+                            <i class="fas fa-align-justify"></i>
+                        </button>
+                        <div class="tool-separator"></div>
                         <button class="tool-btn" id="undoBtn" title="Undo">
                             <i class="fas fa-undo"></i>
                         </button>
@@ -310,6 +343,31 @@
             </div>
         </div>
 
+        <!-- Create Beat Modal -->
+        <div class="modal" id="createBeatModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Create a Beat</h3>
+                    <button class="modal-close" id="closeCreateBeatModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="createBeatForm">
+                        <div class="form-group">
+                            <label for="beatInstructions">What kind of beat do you want to create?</label>
+                            <textarea id="beatInstructions" class="input-field" rows="5" placeholder="e.g., A sudden betrayal by a trusted ally, a mysterious artifact is discovered, a character gains a new power..."></textarea>
+                            <small>Describe the core event or development you want the AI to generate.</small>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelCreateBeat">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="generateBeatBtn">Generate Beat</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Settings Modal -->
         <div class="modal" id="settingsModal">
             <div class="modal-content">
@@ -356,6 +414,45 @@
             <option value="grok/grok-3-mini">Grok 3 Mini</option>
             <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
         </select>
+        <button class="tool-btn" id="floatingBoldBtn" title="Bold">
+            <i class="fas fa-bold"></i>
+        </button>
+        <button class="tool-btn" id="floatingItalicBtn" title="Italic">
+            <i class="fas fa-italic"></i>
+        </button>
+        <button class="tool-btn" id="floatingUnderlineBtn" title="Underline">
+            <i class="fas fa-underline"></i>
+        </button>
+        <button class="tool-btn" id="floatingFormatH1Btn" title="Heading 1">
+            <i class="fas fa-heading"></i>1
+        </button>
+        <button class="tool-btn" id="floatingFormatH2Btn" title="Heading 2">
+            <i class="fas fa-heading"></i>2
+        </button>
+        <button class="tool-btn" id="floatingFormatH3Btn" title="Heading 3">
+            <i class="fas fa-heading"></i>3
+        </button>
+        <button class="tool-btn" id="floatingInsertUnorderedListBtn" title="Unordered List">
+            <i class="fas fa-list-ul"></i>
+        </button>
+        <button class="tool-btn" id="floatingInsertOrderedListBtn" title="Ordered List">
+            <i class="fas fa-list-ol"></i>
+        </button>
+        <button class="tool-btn" id="floatingFormatBlockquoteBtn" title="Blockquote">
+            <i class="fas fa-quote-right"></i>
+        </button>
+        <button class="tool-btn" id="floatingAlignLeftBtn" title="Align Left">
+            <i class="fas fa-align-left"></i>
+        </button>
+        <button class="tool-btn" id="floatingAlignCenterBtn" title="Align Center">
+            <i class="fas fa-align-center"></i>
+        </button>
+        <button class="tool-btn" id="floatingAlignRightBtn" title="Align Right">
+            <i class="fas fa-align-right"></i>
+        </button>
+        <button class="tool-btn" id="floatingAlignJustifyBtn" title="Justify">
+            <i class="fas fa-align-justify"></i>
+        </button>
         <button class="tool-btn" id="aiRephraseBtn" title="Rephrase Selected Text">
             <i class="fas fa-redo-alt"></i> Rephrase
         </button>
@@ -364,6 +461,12 @@
         </button>
         <button class="tool-btn" id="aiSummarizeBtn" title="Summarize Selected Text">
             <i class="fas fa-compress-alt"></i> Summarize
+        </button>
+        <button class="tool-btn" id="aiGetSuggestionsBtn" title="Get AI Suggestions">
+            <i class="fas fa-lightbulb"></i> Suggestions
+        </button>
+        <button class="tool-btn" id="aiCreateBeatBtn" title="Create a Beat">
+            <i class="fas fa-music"></i> Create Beat
         </button>
     </div>
 </body>

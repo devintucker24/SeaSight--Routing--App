@@ -67,6 +67,11 @@ class NovelWriter {
         document.getElementById('closeSettingsModal').addEventListener('click', () => this.closeSettings());
         document.getElementById('openrouterKey').addEventListener('input', (e) => this.saveApiKey(e.target.value));
 
+        // Create Beat Modal
+        document.getElementById('closeCreateBeatModal').addEventListener('click', () => this.closeCreateBeatModal());
+        document.getElementById('cancelCreateBeat').addEventListener('click', () => this.closeCreateBeatModal());
+        document.getElementById('createBeatForm').addEventListener('submit', (e) => this.generateBeat(e));
+
         // Chapter management
         document.getElementById('addChapterBtn').addEventListener('click', () => this.addChapter());
         document.addEventListener('click', (e) => {
@@ -91,6 +96,16 @@ class NovelWriter {
         document.getElementById('boldBtn').addEventListener('click', () => this.formatText('bold'));
         document.getElementById('italicBtn').addEventListener('click', () => this.formatText('italic'));
         document.getElementById('underlineBtn').addEventListener('click', () => this.formatText('underline'));
+        document.getElementById('formatH1Btn').addEventListener('click', () => this.formatText('formatBlock', 'H1'));
+        document.getElementById('formatH2Btn').addEventListener('click', () => this.formatText('formatBlock', 'H2'));
+        document.getElementById('formatH3Btn').addEventListener('click', () => this.formatText('formatBlock', 'H3'));
+        document.getElementById('insertUnorderedListBtn').addEventListener('click', () => this.formatText('insertUnorderedList'));
+        document.getElementById('insertOrderedListBtn').addEventListener('click', () => this.formatText('insertOrderedList'));
+        document.getElementById('formatBlockquoteBtn').addEventListener('click', () => this.formatText('formatBlock', 'blockquote'));
+        document.getElementById('alignLeftBtn').addEventListener('click', () => this.formatText('justifyLeft'));
+        document.getElementById('alignCenterBtn').addEventListener('click', () => this.formatText('justifyCenter'));
+        document.getElementById('alignRightBtn').addEventListener('click', () => this.formatText('justifyRight'));
+        document.getElementById('alignJustifyBtn').addEventListener('click', () => this.formatText('justifyFull'));
         document.getElementById('undoBtn').addEventListener('click', () => this.undo());
         document.getElementById('redoBtn').addEventListener('click', () => this.redo());
 
@@ -170,6 +185,23 @@ class NovelWriter {
         if (this.aiRephraseBtn) this.aiRephraseBtn.addEventListener('click', () => this.rephraseSelectedText());
         if (this.aiExpandBtn) this.aiExpandBtn.addEventListener('click', () => this.expandSelectedText());
         if (this.aiSummarizeBtn) this.aiSummarizeBtn.addEventListener('click', () => this.summarizeSelectedText());
+        document.getElementById('aiGetSuggestionsBtn').addEventListener('click', () => this.getAISuggestions());
+        document.getElementById('aiCreateBeatBtn').addEventListener('click', () => this.openCreateBeatModal());
+
+        // Floating toolbar formatting buttons
+        document.getElementById('floatingBoldBtn').addEventListener('click', () => this.formatText('bold'));
+        document.getElementById('floatingItalicBtn').addEventListener('click', () => this.formatText('italic'));
+        document.getElementById('floatingUnderlineBtn').addEventListener('click', () => this.formatText('underline'));
+        document.getElementById('floatingFormatH1Btn').addEventListener('click', () => this.formatText('formatBlock', 'H1'));
+        document.getElementById('floatingFormatH2Btn').addEventListener('click', () => this.formatText('formatBlock', 'H2'));
+        document.getElementById('floatingFormatH3Btn').addEventListener('click', () => this.formatText('formatBlock', 'H3'));
+        document.getElementById('floatingInsertUnorderedListBtn').addEventListener('click', () => this.formatText('insertUnorderedList'));
+        document.getElementById('floatingInsertOrderedListBtn').addEventListener('click', () => this.formatText('insertOrderedList'));
+        document.getElementById('floatingFormatBlockquoteBtn').addEventListener('click', () => this.formatText('formatBlock', 'blockquote'));
+        document.getElementById('floatingAlignLeftBtn').addEventListener('click', () => this.formatText('justifyLeft'));
+        document.getElementById('floatingAlignCenterBtn').addEventListener('click', () => this.formatText('justifyCenter'));
+        document.getElementById('floatingAlignRightBtn').addEventListener('click', () => this.formatText('justifyRight'));
+        document.getElementById('floatingAlignJustifyBtn').addEventListener('click', () => this.formatText('justifyFull'));
     }
 
     setupFloatingAiToolbar() {
@@ -347,14 +379,31 @@ class NovelWriter {
     }
 
     // Text Formatting
-    formatText(command) {
-        document.execCommand(command, false, null);
+    formatText(command, value = null) {
+        document.execCommand(command, false, value);
         this.saveCurrentChapter();
         
-        // Update button states
-        const button = document.getElementById(command + 'Btn');
+        // Update button states (this part might need more specific logic for formatBlock and alignment)
+        // For now, we'll try to toggle based on command state if applicable.
+        let buttonId = command + 'Btn';
+        if (command === 'formatBlock') {
+            buttonId = `format${value}Btn`; // e.g., formatH1Btn
+        } else if (command.startsWith('justify')) {
+            // Alignment buttons don't have a direct queryCommandState for active
+            // We might need custom logic or rely on the browser's default behavior for now.
+            // For simplicity, we won't toggle active state for alignment buttons immediately.
+            return; 
+        }
+
+        const button = document.getElementById(buttonId);
         if (button) {
-            button.classList.toggle('active', document.queryCommandState(command));
+            // For formatBlock, queryCommandState might not directly reflect the active block.
+            // This is a known limitation with execCommand and contenteditable.
+            // A more robust solution would involve parsing the DOM.
+            // For now, we'll just toggle for simple commands.
+            if (command !== 'formatBlock') {
+                button.classList.toggle('active', document.queryCommandState(command));
+            }
         }
     }
 
@@ -608,6 +657,48 @@ class NovelWriter {
     closeWorldbuildingModal() {
         document.getElementById('worldbuildingModal').classList.remove('active');
         this.editingEntry = null;
+    }
+
+    // Create Beat Modal functions
+    openCreateBeatModal() {
+        document.getElementById('createBeatModal').classList.add('active');
+        document.getElementById('beatInstructions').value = ''; // Clear previous instructions
+    }
+
+    closeCreateBeatModal() {
+        document.getElementById('createBeatModal').classList.remove('active');
+    }
+
+    async generateBeat(e) {
+        e.preventDefault();
+        const instructions = document.getElementById('beatInstructions').value.trim();
+        if (!instructions) {
+            this.showNotification('Please provide instructions for the beat.', 'error');
+            return;
+        }
+        if (!this.apiKey) {
+            this.showNotification('Please set your OpenRouter API key in settings', 'error');
+            this.openSettings();
+            return;
+        }
+
+        const editor = document.getElementById('textEditor');
+        const currentText = this.getPlainText(editor.innerHTML);
+        const novelContext = this.novelData.summary ? `Novel Summary: ${this.novelData.summary}\n\n` : '';
+        const worldbuildingContext = this.getWorldbuildingContext(currentText);
+
+        const prompt = `${novelContext}${worldbuildingContext}
+
+Based on the current novel excerpt and the following instructions, generate a story beat (a significant plot point or event). Keep it concise, around 1-3 paragraphs, and ensure it integrates naturally with the existing narrative and worldbuilding.
+
+Instructions for the beat:
+${instructions}
+
+Current novel excerpt:
+${currentText.slice(-1500)}`; // Provide a good chunk of current text as context
+
+        await this.callAI(prompt, 'Generated Beat', true); // isReplacement = true to allow insertion
+        this.closeCreateBeatModal();
     }
 
     // New Codex rendering and filtering
