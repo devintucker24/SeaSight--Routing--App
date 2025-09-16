@@ -1,0 +1,13 @@
+/* Reset and layout */
+html, body, #root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: #0b1220;
+  color: #eaeef7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* MapLibre default container will fill parent */

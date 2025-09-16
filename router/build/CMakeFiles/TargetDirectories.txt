@@ -1,0 +1,3 @@
+/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles/SeaSightRouter.dir
+/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles/edit_cache.dir
+/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles/rebuild_cache.dir
