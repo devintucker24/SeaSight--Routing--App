@@ -1,12 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
-import { routerService, type RouterConfig, type SafetyCaps, type RouteNode, type LatLonPosition } from '../services/RouterService';
+import { useState, useCallback } from 'react';
+import {
+  routerService,
+  type RouterConfig,
+  type SafetyCaps,
+  type LatLonPosition,
+  type RouteResponse,
+  type SolveRouteOptions,
+} from '../services/RouterService';
 
 export interface UseRouterReturn {
   isInitialized: boolean;
   isLoading: boolean;
   error: string | null;
   initializeRouter: (config: RouterConfig) => Promise<void>;
-  solveRoute: (start: LatLonPosition, goal: LatLonPosition, startTime?: number) => Promise<LatLonPosition[]>;
+  solveRoute: (
+    start: LatLonPosition,
+    goal: LatLonPosition,
+    startTime?: number,
+    options?: SolveRouteOptions
+  ) => Promise<RouteResponse>;
   setSafetyCaps: (caps: SafetyCaps) => void;
   calculateDistance: (start: LatLonPosition, goal: LatLonPosition) => number;
   normalizeLongitude: (lon: number) => number;
@@ -35,10 +47,11 @@ export const useRouter = (): UseRouterReturn => {
   }, []);
 
   const solveRoute = useCallback(async (
-    start: LatLonPosition, 
-    goal: LatLonPosition, 
-    startTime: number = 0
-  ): Promise<LatLonPosition[]> => {
+    start: LatLonPosition,
+    goal: LatLonPosition,
+    startTime: number = 0,
+    options: SolveRouteOptions = {}
+  ): Promise<RouteResponse> => {
     if (!isInitialized) {
       throw new Error('Router not initialized');
     }
@@ -49,16 +62,15 @@ export const useRouter = (): UseRouterReturn => {
       const goalGrid = routerService.latLonToGrid(goal.lat, goal.lon);
 
       // Solve route
-      const routeNodes = routerService.solveRoute(
+      const response = routerService.solveRoute(
         startGrid.i, 
         startGrid.j, 
         goalGrid.i, 
         goalGrid.j, 
-        startTime
+        startTime,
+        { ...options, start, goal }
       );
-
-      // Convert route nodes back to lat/lon
-      return routerService.routeNodesToLatLon(routeNodes);
+      return response;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to solve route';
       setError(errorMessage);

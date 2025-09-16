@@ -12,7 +12,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "Configuring SeaSightRouter for WebAssembly")
 
 # Add the main C++ source file to a variable
-set(ROUTER_SOURCES main.cpp)
+set(ROUTER_SOURCES
+    main.cpp
+    isochrone_router.cpp
+)
 
 # Define the executable from the source files
 add_executable(SeaSightRouter ${ROUTER_SOURCES})

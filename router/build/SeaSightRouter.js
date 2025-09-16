@@ -2752,10 +2752,34 @@ async function createWasm() {
     };
 
 
+  
+  
+  var emval_get_global = () => globalThis;
+  var __emval_get_global = (name) => {
+      if (name===0) {
+        return Emval.toHandle(emval_get_global());
+      } else {
+        name = getStringOrSymbol(name);
+        return Emval.toHandle(emval_get_global()[name]);
+      }
+    };
+
+  var __emval_get_property = (handle, key) => {
+      handle = Emval.toValue(handle);
+      key = Emval.toValue(key);
+      return Emval.toHandle(handle[key]);
+    };
+
   var __emval_incref = (handle) => {
       if (handle > 9) {
         emval_handles[handle + 1] += 1;
       }
+    };
+
+  var __emval_instanceof = (object, constructor) => {
+      object = Emval.toValue(object);
+      constructor = Emval.toValue(constructor);
+      return object instanceof constructor;
     };
 
   
@@ -6026,7 +6050,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'setDelayFunction',
   'validateThis',
   'count_emval_handles',
-  'emval_get_global',
 ];
 missingLibrarySymbols.forEach(missingLibrarySymbol)
 
@@ -6351,6 +6374,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'emval_symbols',
   'getStringOrSymbol',
   'Emval',
+  'emval_get_global',
   'emval_returnValue',
   'emval_lookupTypes',
   'emval_methodCallers',
@@ -6370,11 +6394,11 @@ function checkIncomingModuleAPI() {
 
 // Imports from the Wasm binary.
 var ___getTypeName = makeInvalidEarlyAccess('___getTypeName');
+var _malloc = makeInvalidEarlyAccess('_malloc');
 var _main = Module['_main'] = makeInvalidEarlyAccess('_main');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
 var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
-var _malloc = makeInvalidEarlyAccess('_malloc');
 var _strerror = makeInvalidEarlyAccess('_strerror');
 var _free = makeInvalidEarlyAccess('_free');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
@@ -6385,11 +6409,11 @@ var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_ge
 
 function assignWasmExports(wasmExports) {
   ___getTypeName = createExportWrapper('__getTypeName', 1);
+  _malloc = createExportWrapper('malloc', 1);
   Module['_main'] = _main = createExportWrapper('main', 2);
   _fflush = createExportWrapper('fflush', 1);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
-  _malloc = createExportWrapper('malloc', 1);
   _strerror = createExportWrapper('strerror', 1);
   _free = createExportWrapper('free', 1);
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
@@ -6434,7 +6458,13 @@ var wasmImports = {
   /** @export */
   _emval_decref: __emval_decref,
   /** @export */
+  _emval_get_global: __emval_get_global,
+  /** @export */
+  _emval_get_property: __emval_get_property,
+  /** @export */
   _emval_incref: __emval_incref,
+  /** @export */
+  _emval_instanceof: __emval_instanceof,
   /** @export */
   _emval_invoke: __emval_invoke,
   /** @export */

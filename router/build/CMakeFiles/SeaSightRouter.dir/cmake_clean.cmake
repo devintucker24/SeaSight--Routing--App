@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/SeaSightRouter.dir/isochrone_router.cpp.o"
+  "CMakeFiles/SeaSightRouter.dir/isochrone_router.cpp.o.d"
   "CMakeFiles/SeaSightRouter.dir/main.cpp.o"
   "CMakeFiles/SeaSightRouter.dir/main.cpp.o.d"
   "SeaSightRouter.html"

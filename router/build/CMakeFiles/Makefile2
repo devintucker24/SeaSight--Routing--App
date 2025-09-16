@@ -85,12 +85,12 @@ clean: CMakeFiles/SeaSightRouter.dir/clean
 CMakeFiles/SeaSightRouter.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles --progress-num=1,2 "Built target SeaSightRouter"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles --progress-num=1,2,3 "Built target SeaSightRouter"
 .PHONY : CMakeFiles/SeaSightRouter.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/SeaSightRouter.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles 3
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/SeaSightRouter.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles 0
 .PHONY : CMakeFiles/SeaSightRouter.dir/rule
@@ -102,7 +102,7 @@ SeaSightRouter: CMakeFiles/SeaSightRouter.dir/rule
 # codegen rule for target.
 CMakeFiles/SeaSightRouter.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles --progress-num=1,2 "Finished codegen for target SeaSightRouter"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/devintucker/SeaSight-Routing-App/router/build/CMakeFiles --progress-num=1,2,3 "Finished codegen for target SeaSightRouter"
 .PHONY : CMakeFiles/SeaSightRouter.dir/codegen
 
 # clean rule for target.

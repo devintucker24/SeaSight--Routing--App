@@ -15,17 +15,120 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <cstdint>
+#include <cstring>
+#include <initializer_list>
+#include <string>
+#include <functional>
+#include <stdexcept>
 // These Emscripten libraries are needed to connect our C++ code to JavaScript.
 // emscripten/bind.h: Allows C++ classes and functions to be exposed to JavaScript.
 // emscripten/val.h: Provides a way to work with JavaScript values in C++.
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include "isochrone_router.hpp"
+
+namespace {
+bool hasKey(const emscripten::val& obj, const char* key) {
+    if (obj.isUndefined() || obj.isNull()) {
+        return false;
+    }
+    emscripten::val key_val(key);
+    return obj.call<bool>("hasOwnProperty", key_val);
+}
+
+double getNumber(const emscripten::val& obj, const char* key, double default_value) {
+    if (!hasKey(obj, key)) {
+        return default_value;
+    }
+    emscripten::val value = obj[key];
+    if (value.isUndefined() || value.isNull()) {
+        return default_value;
+    }
+    return value.as<double>();
+}
+
+int getInt(const emscripten::val& obj, const char* key, int default_value) {
+    if (!hasKey(obj, key)) {
+        return default_value;
+    }
+    emscripten::val value = obj[key];
+    if (value.isUndefined() || value.isNull()) {
+        return default_value;
+    }
+    return value.as<int>();
+}
+
+double getNumberAny(const emscripten::val& obj, std::initializer_list<const char*> keys, double default_value) {
+    for (const char* key : keys) {
+        if (hasKey(obj, key)) {
+            return getNumber(obj, key, default_value);
+        }
+    }
+    return default_value;
+}
+
+int getIntAny(const emscripten::val& obj, std::initializer_list<const char*> keys, int default_value) {
+    for (const char* key : keys) {
+        if (hasKey(obj, key)) {
+            return getInt(obj, key, default_value);
+        }
+    }
+    return default_value;
+}
+
+} // namespace
+
 // --- Forward Declarations ---
 // These tell the compiler that these structures and classes exist, so we can use them before they are fully defined.
 struct Node;
 struct Edge;
 class TimeDependentAStar;
+
+struct LandMaskData {
+    double lat0 = -90.0;
+    double lat1 = 90.0;
+    double lon0 = -180.0;
+    double lon1 = 180.0;
+    double d_lat = 1.0;
+    double d_lon = 1.0;
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    std::vector<std::uint8_t> cells;
+    bool loaded = false;
+
+    double normalizeLongitude(double lon) const {
+        while (lon < lon0) lon += 360.0;
+        while (lon > lon1) lon -= 360.0;
+        return lon;
+    }
+
+    bool isLand(double lat, double lon) const {
+        if (!loaded) {
+            return false;
+        }
+        if (lat < lat0 || lat > lat1) {
+            return true;
+        }
+        lon = normalizeLongitude(lon);
+        if (lon < lon0 || lon > lon1) {
+            return true;
+        }
+        const double row_pos = (lat - lat0) / d_lat;
+        const double col_pos = (lon - lon0) / d_lon;
+        const int row = static_cast<int>(std::round(row_pos));
+        const int col = static_cast<int>(std::round(col_pos));
+        if (row < 0 || col < 0 || static_cast<std::uint32_t>(row) >= rows || static_cast<std::uint32_t>(col) >= cols) {
+            return true;
+        }
+        const std::size_t index = static_cast<std::size_t>(row) * cols + static_cast<std::size_t>(col);
+        if (index >= cells.size()) {
+            return true;
+        }
+        return cells[index] != 0;
+    }
+};
 
 // --- Node Structure ---
 // Represents a single point in our search grid at a specific time.
@@ -122,6 +225,7 @@ private:
 
     // --- Safety Configuration ---
     SafetyCaps caps; // The current safety limits for routing.
+    const LandMaskData* land_mask = nullptr; // Optional land mask for land avoidance.
 
     // --- Custom Hash for std::pair<int, int> ---
     // Needed to use `std::pair<int, int>` as a key in `unordered_map` for mask data.
@@ -297,6 +401,9 @@ public:
     // --- Mask Checking ---
     // Checks if a given geographical point (lat, lon) is blocked by a specific mask type.
     bool isMasked(double lat, double lon, MaskType mask_type) const {
+        if (land_mask && land_mask->isLand(lat, lon)) {
+            return true;
+        }
         auto [i, j] = latLonToGrid(lat, lon); // Convert to grid coordinates.
         if (!isValid(i, j)) return true;  // If outside grid, consider it masked (blocked).
 
@@ -360,6 +467,10 @@ public:
     // Allows updating the safety limits used by the router.
     void setSafetyCaps(const SafetyCaps& new_caps) {
         caps = new_caps;
+    }
+
+    void setLandMask(const LandMaskData* mask) {
+        land_mask = mask;
     }
 
     // --- Mask Data Setter (Placeholder) ---
@@ -481,6 +592,12 @@ class RouterWrapper {
 private:
     // A smart pointer to our A* router instance. `unique_ptr` automatically manages memory.
     std::unique_ptr<TimeDependentAStar> router;
+    IsochroneRouter isochrone_router;
+    LandMaskData land_mask;
+
+    IsochroneRouter::Request parseIsochroneRequest(const emscripten::val& request) const;
+    IsochroneRouter::EnvironmentSampler buildEnvironmentSampler(const emscripten::val& sampler, const IsochroneRouter::ShipModel& ship) const;
+    emscripten::val convertIsochroneResult(const IsochroneRouter::Result& result) const;
 
 public:
     // Constructor: Creates a new `TimeDependentAStar` instance when called from JavaScript.
@@ -496,6 +613,43 @@ public:
     // Method to add mask data from JavaScript.
     void addMaskData(int i, int j, const std::vector<bool>& masks) {
         router->addMaskData(i, j, masks);
+    }
+
+    void loadLandMask(const std::vector<std::uint8_t>& bytes) {
+        const std::size_t header_bytes = sizeof(double) * 6 + sizeof(std::uint32_t) * 2;
+        if (bytes.size() < header_bytes) {
+            throw std::runtime_error("Land mask buffer too small");
+        }
+        LandMaskData parsed;
+        std::size_t offset = 0;
+        auto read_double = [&](std::size_t pos) {
+            double value;
+            std::memcpy(&value, bytes.data() + pos, sizeof(double));
+            return value;
+        };
+        parsed.lat0 = read_double(offset); offset += sizeof(double);
+        parsed.lat1 = read_double(offset); offset += sizeof(double);
+        parsed.lon0 = read_double(offset); offset += sizeof(double);
+        parsed.lon1 = read_double(offset); offset += sizeof(double);
+        parsed.d_lat = read_double(offset); offset += sizeof(double);
+        parsed.d_lon = read_double(offset); offset += sizeof(double);
+        auto read_uint32 = [&](std::size_t pos) {
+            std::uint32_t value;
+            std::memcpy(&value, bytes.data() + pos, sizeof(std::uint32_t));
+            return value;
+        };
+        parsed.rows = read_uint32(offset); offset += sizeof(std::uint32_t);
+        parsed.cols = read_uint32(offset); offset += sizeof(std::uint32_t);
+        const std::size_t expected_cells = static_cast<std::size_t>(parsed.rows) * static_cast<std::size_t>(parsed.cols);
+        if (bytes.size() - offset < expected_cells) {
+            throw std::runtime_error("Land mask buffer missing cell data");
+        }
+        parsed.cells.assign(bytes.begin() + static_cast<long>(offset), bytes.begin() + static_cast<long>(offset + expected_cells));
+        parsed.loaded = true;
+        land_mask = std::move(parsed);
+        if (router) {
+            router->setLandMask(&land_mask);
+        }
     }
 
     // Method to solve a route and return the path as a JavaScript array of objects.
@@ -565,10 +719,167 @@ public:
         return router->testNormalizeLongitude(lon);
     }
 
-    bool crossesAntiMeridian(double lon1, double lon2) {
+bool crossesAntiMeridian(double lon1, double lon2) {
         return router->testCrossesAntiMeridian(lon1, lon2);
     }
+
+    emscripten::val solveIsochrone(const emscripten::val& request, const emscripten::val& sampler = emscripten::val::undefined()) {
+        IsochroneRouter::Request parsed_request = parseIsochroneRequest(request);
+        auto environment_sampler = buildEnvironmentSampler(sampler, parsed_request.ship);
+        auto result = isochrone_router.solve(parsed_request, environment_sampler);
+        return convertIsochroneResult(result);
+    }
 };
+
+IsochroneRouter::Request RouterWrapper::parseIsochroneRequest(const emscripten::val& request) const {
+    IsochroneRouter::Request parsed;
+
+    emscripten::val start = hasKey(request, "start") ? request["start"] : emscripten::val::object();
+    parsed.start.lat = getNumberAny(start, {"lat", "latitude"}, parsed.start.lat);
+    parsed.start.lon = getNumberAny(start, {"lon", "lng", "longitude"}, parsed.start.lon);
+
+    emscripten::val dest = hasKey(request, "destination") ? request["destination"] : emscripten::val::object();
+    if (!hasKey(request, "destination") && hasKey(request, "goal")) {
+        dest = request["goal"];
+    }
+    parsed.goal.lat = getNumberAny(dest, {"lat", "latitude"}, parsed.goal.lat);
+    parsed.goal.lon = getNumberAny(dest, {"lon", "lng", "longitude"}, parsed.goal.lon);
+
+    parsed.departure_time_hours = getNumberAny(request,
+        {"departTimeHours", "departureTimeHours", "depart_time", "departureTime"},
+        parsed.departure_time_hours);
+
+    IsochroneRouter::Settings settings = parsed.settings;
+    settings.time_step_minutes = getNumberAny(request, {"timeStepMinutes", "time_step_minutes"}, settings.time_step_minutes);
+    settings.heading_count = getIntAny(request, {"headingCount", "heading_count"}, settings.heading_count);
+    settings.merge_radius_nm = getNumberAny(request, {"mergeRadiusNm", "merge_radius_nm"}, settings.merge_radius_nm);
+    settings.goal_radius_nm = getNumberAny(request, {"goalRadiusNm", "goal_radius_nm"}, settings.goal_radius_nm);
+    settings.max_hours = getNumberAny(request, {"maxHours", "max_hours"}, settings.max_hours);
+
+    emscripten::val settings_obj = hasKey(request, "settings") ? request["settings"] : emscripten::val::object();
+    settings.time_step_minutes = getNumberAny(settings_obj, {"timeStepMinutes", "time_step_minutes"}, settings.time_step_minutes);
+    settings.heading_count = getIntAny(settings_obj, {"headingCount", "heading_count"}, settings.heading_count);
+    settings.merge_radius_nm = getNumberAny(settings_obj, {"mergeRadiusNm", "merge_radius_nm"}, settings.merge_radius_nm);
+    settings.goal_radius_nm = getNumberAny(settings_obj, {"goalRadiusNm", "goal_radius_nm"}, settings.goal_radius_nm);
+    settings.max_hours = getNumberAny(settings_obj, {"maxHours", "max_hours"}, settings.max_hours);
+    parsed.settings = settings;
+
+    IsochroneRouter::ShipModel ship = parsed.ship;
+    emscripten::val ship_obj = hasKey(request, "ship") ? request["ship"] : emscripten::val::object();
+    if (!hasKey(request, "ship") && hasKey(request, "shipModel")) {
+        ship_obj = request["shipModel"];
+    }
+    ship.calm_speed_kts = getNumberAny(ship_obj, {"calmSpeedKts", "speed", "cruiseSpeedKts"}, ship.calm_speed_kts);
+    ship.draft_m = getNumberAny(ship_obj, {"draft", "draftM", "draftMeters"}, ship.draft_m);
+    ship.safety_depth_buffer_m = getNumberAny(ship_obj, {"safetyDepthBuffer", "safetyDepthMargin"}, ship.safety_depth_buffer_m);
+    ship.max_wave_height_m = getNumberAny(ship_obj, {"maxWaveHeight", "waveHeightCap"}, ship.max_wave_height_m);
+    ship.max_heading_change_deg = getNumberAny(ship_obj, {"maxHeadingChange", "maxHeadingDelta", "headingChangeLimit"}, ship.max_heading_change_deg);
+    ship.min_speed_kts = getNumberAny(ship_obj, {"minSpeed", "minSpeedKts"}, ship.min_speed_kts);
+    ship.wave_drag_coefficient = getNumberAny(ship_obj, {"waveDragCoefficient", "waveLossCoefficient"}, ship.wave_drag_coefficient);
+
+    emscripten::val safety = hasKey(request, "safetyCaps") ? request["safetyCaps"] : emscripten::val::object();
+    ship.max_wave_height_m = getNumberAny(safety, {"maxWaveHeight", "waveHeightCap"}, ship.max_wave_height_m);
+    ship.max_heading_change_deg = getNumberAny(safety, {"maxHeadingChange", "maxHeadingDelta"}, ship.max_heading_change_deg);
+    double min_water_depth = getNumberAny(safety, {"minWaterDepth", "minimumWaterDepth"}, 0.0);
+    if (min_water_depth > 0.0) {
+        double buffer = min_water_depth - ship.draft_m;
+        if (buffer > ship.safety_depth_buffer_m) {
+            ship.safety_depth_buffer_m = buffer;
+        }
+    }
+
+    double draft_override = getNumberAny(safety, {"draft", "draftMeters"}, ship.draft_m);
+    if (draft_override > 0.0) {
+        ship.draft_m = draft_override;
+    }
+
+    parsed.ship = ship;
+    return parsed;
+}
+
+IsochroneRouter::EnvironmentSampler RouterWrapper::buildEnvironmentSampler(const emscripten::val& sampler, const IsochroneRouter::ShipModel& ship) const {
+    constexpr double PI = 3.14159265358979323846;
+
+    // Default sampler provides gentle background currents and deep water so routing works without external data feeds.
+    IsochroneRouter::EnvironmentSampler base_sampler = [this, ship](double lat, double lon, double time_hours) {
+        const double lat_rad = lat * PI / 180.0;
+        const double lon_rad = lon * PI / 180.0;
+        IsochroneRouter::EnvironmentSample sample;
+        sample.current_east_kn = 0.4 * std::sin(lat_rad) * std::cos(time_hours / 6.0);
+        sample.current_north_kn = 0.3 * std::cos(lat_rad) * std::sin(time_hours / 6.0);
+        sample.wave_height_m = std::max(0.0, 1.0 + 0.4 * std::sin(lat_rad + lon_rad + time_hours / 12.0));
+        if (land_mask.loaded && land_mask.isLand(lat, lon)) {
+            sample.depth_m = 0.0;
+            sample.wave_height_m = ship.max_wave_height_m + 10.0;
+        } else {
+            sample.depth_m = 5000.0;
+        }
+        return sample;
+    };
+
+    if (sampler.isUndefined() || sampler.isNull()) {
+        return base_sampler;
+    }
+
+    emscripten::val function_constructor = emscripten::val::global("Function");
+    const bool is_function = sampler.instanceof(function_constructor);
+    const bool has_sample_method = !is_function && hasKey(sampler, "sample");
+
+    if (!is_function && !has_sample_method) {
+        return base_sampler;
+    }
+
+    return [sampler, base_sampler, is_function, this, ship](double lat, double lon, double time_hours) {
+        IsochroneRouter::EnvironmentSample sample = base_sampler(lat, lon, time_hours);
+        emscripten::val result = is_function
+            ? sampler(lat, lon, time_hours)
+            : sampler.call<emscripten::val>("sample", lat, lon, time_hours);
+
+        if (!result.isUndefined() && !result.isNull()) {
+            sample.current_east_kn = getNumberAny(result, {"current_east_kn", "currentEastKn", "current_east", "currentU", "currentEast"}, sample.current_east_kn);
+            sample.current_north_kn = getNumberAny(result, {"current_north_kn", "currentNorthKn", "current_north", "currentV", "currentNorth"}, sample.current_north_kn);
+            sample.wave_height_m = getNumberAny(result, {"wave_height_m", "waveHeightM", "hs", "significantWaveHeight"}, sample.wave_height_m);
+            sample.depth_m = getNumberAny(result, {"depth_m", "depth", "depthM"}, sample.depth_m);
+        }
+
+        if (land_mask.loaded && land_mask.isLand(lat, lon)) {
+            sample.depth_m = 0.0;
+            sample.wave_height_m = std::max(sample.wave_height_m, ship.max_wave_height_m + 5.0);
+        }
+
+        return sample;
+    };
+}
+
+emscripten::val RouterWrapper::convertIsochroneResult(const IsochroneRouter::Result& result) const {
+    emscripten::val output = emscripten::val::object();
+    output.set("mode", std::string("ISOCHRONE"));
+
+    emscripten::val waypoint_array = emscripten::val::array();
+    for (std::size_t i = 0; i < result.waypoints.size(); ++i) {
+        const auto& wp = result.waypoints[i];
+        emscripten::val waypoint = emscripten::val::object();
+        waypoint.set("lat", wp.lat);
+        waypoint.set("lon", wp.lon);
+        waypoint.set("time", wp.time_hours);
+        waypoint_array.set(static_cast<unsigned>(i), waypoint);
+    }
+    output.set("waypoints", waypoint_array);
+    output.set("eta", result.diagnostics.eta_hours);
+
+    emscripten::val diagnostics = emscripten::val::object();
+    diagnostics.set("totalDistanceNm", result.diagnostics.total_distance_nm);
+    diagnostics.set("averageSpeedKts", result.diagnostics.average_speed_kts);
+    diagnostics.set("maxWaveHeightM", result.diagnostics.max_wave_height_m);
+    diagnostics.set("stepCount", result.diagnostics.step_count);
+    diagnostics.set("frontierCount", result.diagnostics.frontier_size);
+    diagnostics.set("reachedGoal", result.diagnostics.reached_goal);
+    diagnostics.set("finalDistanceToGoalNm", result.diagnostics.final_distance_to_goal_nm);
+    diagnostics.set("etaHours", result.diagnostics.eta_hours);
+    output.set("diagnostics", diagnostics);
+
+    return output;
+}
 
 // --- Emscripten Bindings ---
 // This macro registers our C++ classes and functions so they can be called from JavaScript.
@@ -580,7 +891,9 @@ EMSCRIPTEN_BINDINGS(seasight_router) {
         // Expose public methods of `RouterWrapper` to JavaScript.
         .function("setSafetyCaps", &RouterWrapper::setSafetyCaps)
         .function("addMaskData", &RouterWrapper::addMaskData)
+        .function("loadLandMask", &RouterWrapper::loadLandMask)
         .function("solve", &RouterWrapper::solve)
+        .function("solveIsochrone", &RouterWrapper::solveIsochrone)
         .function("createEdge", &RouterWrapper::createEdge)
         .function("gridToLatLon", &RouterWrapper::gridToLatLon)
         .function("latLonToGrid", &RouterWrapper::latLonToGrid)
@@ -590,6 +903,7 @@ EMSCRIPTEN_BINDINGS(seasight_router) {
 
     // Register `std::vector<bool>` so Emscripten knows how to convert it to/from JavaScript arrays.
     emscripten::register_vector<bool>("vector<bool>");
+    emscripten::register_vector<std::uint8_t>("vector<uint8_t>");
 }
 
 // --- Main Function (for C++ standalone testing) ---

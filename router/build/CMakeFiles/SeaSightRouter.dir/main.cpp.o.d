@@ -652,4 +652,5 @@ CMakeFiles/SeaSightRouter.dir/main.cpp.o: \
   /Users/devintucker/SeaSight-Routing-App/emsdk/upstream/emscripten/cache/sysroot/include/c++/v1/__tree \
   /Users/devintucker/SeaSight-Routing-App/emsdk/upstream/emscripten/cache/sysroot/include/emscripten/em_asm.h \
   /Users/devintucker/SeaSight-Routing-App/emsdk/upstream/emscripten/cache/sysroot/include/emscripten/val.h \
-  /Users/devintucker/SeaSight-Routing-App/emsdk/upstream/emscripten/cache/sysroot/include/emscripten/wire.h
+  /Users/devintucker/SeaSight-Routing-App/emsdk/upstream/emscripten/cache/sysroot/include/emscripten/wire.h \
+  /Users/devintucker/SeaSight-Routing-App/router/isochrone_router.hpp

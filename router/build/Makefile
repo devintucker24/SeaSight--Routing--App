@@ -129,6 +129,30 @@ SeaSightRouter/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/build
 .PHONY : SeaSightRouter/fast
 
+isochrone_router.o: isochrone_router.cpp.o
+.PHONY : isochrone_router.o
+
+# target to build an object file
+isochrone_router.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/isochrone_router.cpp.o
+.PHONY : isochrone_router.cpp.o
+
+isochrone_router.i: isochrone_router.cpp.i
+.PHONY : isochrone_router.i
+
+# target to preprocess a source file
+isochrone_router.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/isochrone_router.cpp.i
+.PHONY : isochrone_router.cpp.i
+
+isochrone_router.s: isochrone_router.cpp.s
+.PHONY : isochrone_router.s
+
+# target to generate assembly for a file
+isochrone_router.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SeaSightRouter.dir/build.make CMakeFiles/SeaSightRouter.dir/isochrone_router.cpp.s
+.PHONY : isochrone_router.cpp.s
+
 main.o: main.cpp.o
 .PHONY : main.o
 
@@ -162,6 +186,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... SeaSightRouter"
+	@echo "... isochrone_router.o"
+	@echo "... isochrone_router.i"
+	@echo "... isochrone_router.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

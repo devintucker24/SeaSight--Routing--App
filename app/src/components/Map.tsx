@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useRouter } from '../hooks/useRouter'
-import type { LatLonPosition, SafetyCaps } from '../services/RouterService'
+import type { LatLonPosition, RoutingMode, IsochroneDiagnostics } from '../services/RouterService'
 
 interface MapProps {
   onMapClick?: (lngLat: [number, number]) => void
@@ -11,9 +11,6 @@ interface MapProps {
 }
 
 type MapStyle = 'openfreemap-liberty' | 'dark-maritime'
-
-// Router grid bounds used by the current WASM router
-const BOUNDS = { lat0: 30, lat1: 50, lon0: -80, lon1: -60 }
 
 const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
   const mapRef = useRef<HTMLDivElement | null>(null)
@@ -24,6 +21,9 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
   const [waypoints, setWaypoints] = useState<LatLonPosition[]>([])
   const [route, setRoute] = useState<LatLonPosition[]>([])
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
+  const [routingMode, setRoutingMode] = useState<RoutingMode>('ASTAR')
+  const [routeDiagnostics, setRouteDiagnostics] = useState<IsochroneDiagnostics | null>(null)
+  const [lastEta, setLastEta] = useState<number | null>(null)
   
   // Router integration
   const { 
@@ -40,12 +40,12 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
     const initializeRouterService = async () => {
       try {
         await initializeRouter({
-          lat0: 30.0,
-          lat1: 50.0,
-          lon0: -80.0,
-          lon1: -60.0,
-          dLat: 0.5,
-          dLon: 0.5
+          lat0: -80.0,
+          lat1: 80.0,
+          lon0: -180.0,
+          lon1: 180.0,
+          dLat: 1.0,
+          dLon: 1.0
         });
         
         // Set default safety caps
@@ -65,14 +65,11 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
   // Handle map clicks for waypoint selection with bounds guard
   const handleMapClick = useCallback((lngLat: [number, number]) => {
     const p: LatLonPosition = { lat: lngLat[1], lon: lngLat[0] }
-    if (
-      p.lat < BOUNDS.lat0 || p.lat > BOUNDS.lat1 ||
-      p.lon < BOUNDS.lon0 || p.lon > BOUNDS.lon1
-    ) {
-      console.warn('Waypoint outside router bounds')
-      return
-    }
-    setWaypoints(prev => [...prev, p])
+    setWaypoints(prev => {
+      if (prev.length === 0) return [p]
+      if (prev.length === 1) return [prev[0], p]
+      return [prev[1], p]
+    })
     if (onMapClick) onMapClick(lngLat)
   }, [onMapClick])
 
@@ -84,24 +81,47 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
     try {
       const start = waypoints[0]
       const end = waypoints[waypoints.length - 1]
-      const res = await solveRoute(start, end)
-      const out = res.length >= 2 ? res : [start, end]
+      const res = await solveRoute(start, end, 0, { mode: routingMode })
+
+      let path = res.waypoints
+      if (path.length >= 2) {
+        const first = path[0]
+        const last = path[path.length - 1]
+        const withEndpoints = [...path]
+        if (Math.abs(first.lat - start.lat) > 1e-3 || Math.abs(first.lon - start.lon) > 1e-3) {
+          withEndpoints.unshift({ lat: start.lat, lon: start.lon, time: first.time })
+        }
+        if (Math.abs(last.lat - end.lat) > 1e-3 || Math.abs(last.lon - end.lon) > 1e-3) {
+          withEndpoints.push({ lat: end.lat, lon: end.lon, time: last.time })
+        }
+        path = withEndpoints
+      } else {
+        path = [start, end]
+      }
+
+      const out = path.map(({ lat, lon }) => ({ lat, lon }))
       setRoute(out)
+      setRouteDiagnostics(res.diagnostics ?? null)
+      setLastEta(res.etaHours ?? null)
       if (onRouteCalculated) onRouteCalculated(out)
     } catch (err) {
       const start = waypoints[0]
       const end = waypoints[waypoints.length - 1]
       setRoute([start, end])
+      setRouteDiagnostics(null)
+      setLastEta(null)
       console.error('Failed to calculate route, using direct line fallback:', err)
     } finally {
       setIsCalculatingRoute(false);
     }
-  }, [waypoints, isInitialized, solveRoute, onRouteCalculated])
+  }, [waypoints, isInitialized, solveRoute, routingMode, onRouteCalculated])
 
   // Clear waypoints and route
   const clearRoute = useCallback(() => {
     setWaypoints([])
     setRoute([])
+    setRouteDiagnostics(null)
+    setLastEta(null)
   }, [])
 
   // Map style configurations - optimized for maritime use
@@ -205,10 +225,21 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
         type: 'circle',
         source: 'waypoints',
         paint: {
-          'circle-radius': 8,
-          'circle-color': '#ff6b6b',
+          'circle-radius': [
+            'case',
+            ['==', ['get', 'role'], 'start'], 10,
+            ['==', ['get', 'role'], 'destination'], 10,
+            8
+          ],
+          'circle-color': [
+            'case',
+            ['==', ['get', 'role'], 'start'], '#22d3ee',
+            ['==', ['get', 'role'], 'destination'], '#f97316',
+            '#f8fafc'
+          ],
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
+          'circle-stroke-color': '#0f172a',
+          'circle-opacity': 0.95
         }
       })
 
@@ -270,7 +301,8 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
       },
       properties: {
         id: index,
-        label: `Waypoint ${index + 1}`
+        label: index === 0 ? 'Departure' : 'Destination',
+        role: index === 0 ? 'start' : 'destination'
       }
     }));
 
@@ -404,6 +436,32 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
           flexDirection: 'column',
           gap: '4px'
         }}>
+          <div style={{
+            display: 'flex',
+            gap: '6px'
+          }}>
+            {(['ASTAR', 'ISOCHRONE'] as RoutingMode[]).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setRoutingMode(mode)}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  backgroundColor: routingMode === mode ? '#0ea5e9' : '#1f2937',
+                  color: 'white',
+                  border: '1px solid rgba(148, 163, 184, 0.5)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  boxShadow: routingMode === mode ? '0 0 12px rgba(56, 189, 248, 0.6)' : '0 2px 4px rgba(0,0,0,0.3)',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                {mode === 'ASTAR' ? 'A* SEARCH' : 'ISOCHRONE'}
+              </button>
+            ))}
+          </div>
           <button
             onClick={calculateRoute}
             disabled={waypoints.length < 2 || !isInitialized || isCalculatingRoute}
@@ -466,6 +524,7 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
           {error && <div style={{ fontSize: '10px', color: '#fca5a5' }}>{error}</div>}
           <div>Waypoints: {waypoints.length}</div>
           {route.length > 0 && <div>Route: {route.length} points</div>}
+          <div>Mode: {routingMode}</div>
         </div>
 
         {/* Coordinates Display */}
@@ -518,12 +577,66 @@ const Map = ({ onMapClick, onMapLoad, onRouteCalculated }: MapProps) => {
         backdropFilter: 'blur(4px)'
       }}>
         {waypoints.length === 0 
-          ? 'Click on the map to select waypoints' 
+          ? 'Click anywhere to set your departure point' 
           : waypoints.length === 1 
-            ? 'Click to add destination, then click "Calculate Route"'
-            : 'Click "Calculate Route" to plan your journey'
+            ? 'Click again to choose a destination, then solve the route'
+            : 'Click "Calculate Route" to generate the full voyage'
         }
       </div>
+
+      {routeDiagnostics && (
+        <div style={{
+          position: 'absolute',
+          bottom: '24px',
+          left: '24px',
+          backgroundColor: 'rgba(15, 23, 42, 0.92)',
+          color: '#e0f2fe',
+          padding: '14px 18px',
+          borderRadius: '12px',
+          border: '1px solid rgba(56, 189, 248, 0.4)',
+          boxShadow: '0 12px 24px rgba(8, 145, 178, 0.35)',
+          fontSize: '12px',
+          minWidth: '220px',
+          backdropFilter: 'blur(8px)',
+          zIndex: 1100
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: '8px',
+            fontSize: '11px',
+            letterSpacing: '0.08em',
+            color: '#38bdf8'
+          }}>
+            <span>ROUTER MODE</span>
+            <span>{routingMode}</span>
+          </div>
+          <div style={{ display: 'grid', gap: '6px', color: '#cbd5f5' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Distance</span>
+              <span>{routeDiagnostics.totalDistanceNm.toFixed(1)} nm</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Avg Speed</span>
+              <span>{routeDiagnostics.averageSpeedKts.toFixed(1)} kts</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Peak Hs</span>
+              <span>{routeDiagnostics.maxWaveHeightM.toFixed(1)} m</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Frontier</span>
+              <span>{routeDiagnostics.frontierCount}</span>
+            </div>
+            {lastEta !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>ETA (hrs)</span>
+                <span>{lastEta.toFixed(1)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

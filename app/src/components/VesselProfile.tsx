@@ -49,24 +49,28 @@ const VesselProfile = () => {
 
   return (
     <div style={{
-      position: 'absolute',
-      top: '10px',
-      right: '200px',
-      zIndex: 1000,
-      backgroundColor: 'rgba(0,0,0,0.9)',
-      color: 'white',
-      padding: '16px',
-      borderRadius: '8px',
-      minWidth: '250px',
-      backdropFilter: 'blur(8px)'
+      color: 'var(--white)',
+      padding: '0',
+      minWidth: '250px'
     }}>
-      <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
+      <h3 style={{ 
+        margin: '0 0 16px 0', 
+        fontSize: '16px', 
+        fontWeight: '600',
+        color: 'var(--cyan-400)'
+      }}>
         🚢 Vessel Profile
       </h3>
       
       {/* Profile Selector */}
       <div style={{ marginBottom: '12px' }}>
-        <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
+        <label style={{ 
+          display: 'block', 
+          fontSize: '12px', 
+          marginBottom: '4px',
+          color: 'var(--silver-200)',
+          fontWeight: '500'
+        }}>
           Ship Type
         </label>
         <select
@@ -77,12 +81,13 @@ const VesselProfile = () => {
           }}
           style={{
             width: '100%',
-            padding: '6px 8px',
-            backgroundColor: '#374151',
-            color: 'white',
-            border: '1px solid #4b5563',
-            borderRadius: '4px',
-            fontSize: '12px'
+            padding: '8px 12px',
+            backgroundColor: 'rgba(2, 11, 26, 0.6)',
+            color: 'var(--white)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: '6px',
+            fontSize: '12px',
+            backdropFilter: 'blur(4px)'
           }}
         >
           {profiles.map(profile => (
@@ -95,25 +100,53 @@ const VesselProfile = () => {
 
       {/* Vessel Details */}
       <div style={{ fontSize: '11px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-          <span>Length:</span>
-          <span>{selectedProfile.length}m</span>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginBottom: '6px',
+          padding: '4px 0',
+          borderBottom: '1px solid var(--glass-border)'
+        }}>
+          <span style={{ color: 'var(--silver-200)' }}>Length:</span>
+          <span style={{ color: 'var(--cyan-400)', fontWeight: '600' }}>{selectedProfile.length}m</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-          <span>Beam:</span>
-          <span>{selectedProfile.beam}m</span>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginBottom: '6px',
+          padding: '4px 0',
+          borderBottom: '1px solid var(--glass-border)'
+        }}>
+          <span style={{ color: 'var(--silver-200)' }}>Beam:</span>
+          <span style={{ color: 'var(--cyan-400)', fontWeight: '600' }}>{selectedProfile.beam}m</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-          <span>Draft:</span>
-          <span>{selectedProfile.draft}m</span>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginBottom: '6px',
+          padding: '4px 0',
+          borderBottom: '1px solid var(--glass-border)'
+        }}>
+          <span style={{ color: 'var(--silver-200)' }}>Draft:</span>
+          <span style={{ color: 'var(--cyan-400)', fontWeight: '600' }}>{selectedProfile.draft}m</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-          <span>Freeboard:</span>
-          <span>{selectedProfile.freeboard}m</span>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginBottom: '6px',
+          padding: '4px 0',
+          borderBottom: '1px solid var(--glass-border)'
+        }}>
+          <span style={{ color: 'var(--silver-200)' }}>Freeboard:</span>
+          <span style={{ color: 'var(--cyan-400)', fontWeight: '600' }}>{selectedProfile.freeboard}m</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Speed:</span>
-          <span>{selectedProfile.serviceSpeed} kts</span>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          padding: '4px 0'
+        }}>
+          <span style={{ color: 'var(--silver-200)' }}>Speed:</span>
+          <span style={{ color: 'var(--cyan-400)', fontWeight: '600' }}>{selectedProfile.serviceSpeed} kts</span>
         </div>
       </div>
     </div>
