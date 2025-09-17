@@ -64,13 +64,13 @@ function App() {
       if (prev.length === 1) {
         return normalizeWaypoints([
           prev[0],
-          { id: nextId, lat: coords.lat, lon: coords.lon, name: label }
+          { id: nextId, lat: coords.lat, lon: coords.lon, name: label ?? '' }
         ])
       }
 
       return normalizeWaypoints([
         prev[0],
-        { id: nextId, lat: coords.lat, lon: coords.lon, name: label }
+        { id: nextId, lat: coords.lat, lon: coords.lon, name: label ?? '' }
       ])
     })
   }
