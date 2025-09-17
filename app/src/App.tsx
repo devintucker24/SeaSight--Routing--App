@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import './App.css'
 import MapSimplified, { type MapRef } from './components/MapSimplified'
 import RoutePlanner from './components/RoutePlanner'
@@ -16,10 +16,17 @@ interface Waypoint {
   name: string
 }
 
+const normalizeWaypoints = (items: Waypoint[]): Waypoint[] =>
+  items.map((wp, idx) => ({
+    ...wp,
+    name: idx === 0 ? 'Departure' : idx === 1 ? 'Destination' : `Waypoint ${idx + 1}`
+  }))
+
 function App() {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([])
   const [route, setRoute] = useState<LatLonPosition[]>([])
   const [routeResult, setRouteResult] = useState<RouteResponse | null>(null)
+  const [lastSolveKey, setLastSolveKey] = useState<string | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [rightPanelOpen, setRightPanelOpen] = useState(false)
   const [mapStyle, setMapStyle] = useState<'openfreemap-liberty' | 'dark-maritime'>('dark-maritime')
@@ -45,18 +52,26 @@ function App() {
   const mapRef = useRef<MapRef>(null)
 
   const addWaypoint = (coords: LatLonPosition, label?: string) => {
+    setRoute([])
+    setRouteResult(null)
     setWaypoints(prev => {
-      const index = prev.length
-      const name = label ?? (index === 0 ? 'Departure' : index === 1 ? 'Destination' : `Waypoint ${index + 1}`)
-      return [
-        ...prev,
-        {
-          id: `wp-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-          lat: coords.lat,
-          lon: coords.lon,
-          name
-        }
-      ]
+      const nextId = `wp-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+
+      if (prev.length === 0) {
+        return normalizeWaypoints([{ id: nextId, lat: coords.lat, lon: coords.lon, name: label ?? 'Departure' }])
+      }
+
+      if (prev.length === 1) {
+        return normalizeWaypoints([
+          prev[0],
+          { id: nextId, lat: coords.lat, lon: coords.lon, name: label }
+        ])
+      }
+
+      return normalizeWaypoints([
+        prev[0],
+        { id: nextId, lat: coords.lat, lon: coords.lon, name: label }
+      ])
     })
   }
 
@@ -69,12 +84,14 @@ function App() {
   }
 
   const handleWaypointRemove = (id: string) => {
-    setWaypoints(prev => prev.filter(wp => wp.id !== id))
+    setWaypoints(prev => normalizeWaypoints(prev.filter(wp => wp.id !== id)))
+    setRoute([])
+    setRouteResult(null)
+    setLastSolveKey(null)
   }
 
-  const handleRoutePlan = async () => {
-    if (!mapRef.current) return
-    if (waypoints.length < 2) return
+  const runRouteSolve = useCallback(async () => {
+    if (!mapRef.current || waypoints.length < 2) return
     setIsCalculating(true)
     try {
       await mapRef.current.calculateRoute()
@@ -83,12 +100,17 @@ function App() {
     } finally {
       setIsCalculating(false)
     }
+  }, [waypoints])
+
+  const handleRoutePlan = () => {
+    void runRouteSolve()
   }
 
   const handleClearRoute = () => {
     setWaypoints([])
     setRoute([])
     setRouteResult(null)
+    setLastSolveKey(null)
     mapRef.current?.clearRoute()
   }
 
@@ -137,10 +159,28 @@ function App() {
     if (result && result.waypoints) {
       const coords = result.waypoints.map(({ lat, lon }) => ({ lat, lon }))
       setRoute(coords)
+      if (waypoints.length >= 2) {
+        const start = waypoints[0]
+        const destination = waypoints[1]
+        const key = `${start.lat.toFixed(4)},${start.lon.toFixed(4)}|${destination.lat.toFixed(4)},${destination.lon.toFixed(4)}`
+        setLastSolveKey(key)
+      }
     } else {
       setRoute([])
+      setLastSolveKey(null)
     }
   }
+
+  useEffect(() => {
+    if (waypoints.length === 2) {
+      const start = waypoints[0]
+      const destination = waypoints[1]
+      const key = `${start.lat.toFixed(4)},${start.lon.toFixed(4)}|${destination.lat.toFixed(4)},${destination.lon.toFixed(4)}`
+      if (lastSolveKey !== key) {
+        void runRouteSolve()
+      }
+    }
+  }, [waypoints, runRouteSolve, lastSolveKey])
 
   const formatDuration = (hours: number | undefined) => {
     if (hours === undefined || Number.isNaN(hours)) return undefined
@@ -183,32 +223,6 @@ function App() {
         showOpenSeaMap={showOpenSeaMap}
         isochroneOptions={isochroneOpts}
       />
-
-      {/* Start Auto Route Button */}
-      <button
-        onClick={handleRoutePlan}
-        disabled={waypointCount < 2 || isCalculating}
-        className="glass-panel"
-        style={{
-          position: 'absolute',
-          right: '20px',
-          bottom: '88px',
-          zIndex: 1100,
-          padding: '10px 16px',
-          borderRadius: '999px',
-          background: waypointCount >= 2 && !isCalculating ? 'var(--cyan-500)' : 'rgba(2, 11, 26, 0.45)',
-          color: waypointCount >= 2 && !isCalculating ? 'var(--navy-900)' : 'var(--silver-300)',
-          border: '1px solid var(--glass-border)',
-          cursor: waypointCount >= 2 && !isCalculating ? 'pointer' : 'not-allowed',
-          fontSize: '12px',
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          boxShadow: waypointCount >= 2 && !isCalculating ? 'var(--glow)' : 'none'
-        }}
-        title={waypointCount < 2 ? 'Add at least 2 waypoints on the map' : (isCalculating ? 'Calculating...' : 'Start Auto Route')}
-      >
-        {isCalculating ? 'Calculating…' : 'Start Auto Route'}
-      </button>
 
       {/* Clear Waypoints Button */}
       <button
@@ -331,6 +345,7 @@ function App() {
       >
         <RoutePlanner 
           waypoints={waypoints}
+          routeResult={routeResult}
           onWaypointAdd={handleWaypointAdd}
           onWaypointRemove={handleWaypointRemove}
           onClearWaypoints={() => {

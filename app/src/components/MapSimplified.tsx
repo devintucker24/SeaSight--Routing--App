@@ -110,6 +110,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, onMapCli
       const start = waypoints[0]
       const end = waypoints[waypoints.length - 1]
       onRouteCalculated?.([start, end])
+      onRouteSolved?.(null)
       console.error('Failed to calculate route, using direct line fallback:', err)
     }
   }, [waypoints, isInitialized, solveRoute, onRouteCalculated, onRouteSolved, routingMode, isochroneOptions])
@@ -137,7 +138,52 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, onMapCli
     }
   }
 
-  const ensureCustomLayers = (map: maplibregl.Map) => {
+  const updateWaypointSource = useCallback((map: maplibregl.Map) => {
+    const source = map.getSource('waypoints') as maplibregl.GeoJSONSource | undefined
+    if (!source) return
+
+    const waypointFeatures = waypoints.map((wp, index) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [wp.lon, wp.lat]
+      },
+      properties: {
+        id: index,
+        label: index === 0 ? 'Departure' : index === waypoints.length - 1 ? 'Destination' : `Waypoint ${index + 1}`,
+        role: index === 0 ? 'start' : index === waypoints.length - 1 ? 'destination' : 'via'
+      }
+    }))
+
+    source.setData({
+      type: 'FeatureCollection',
+      features: waypointFeatures
+    })
+  }, [waypoints])
+
+  const updateRouteSource = useCallback((map: maplibregl.Map) => {
+    const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined
+    if (!source) return
+    if (route.length < 2) {
+      source.setData({ type: 'FeatureCollection', features: [] })
+      return
+    }
+    source.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: route.map(point => [point.lon, point.lat])
+          },
+          properties: {}
+        }
+      ]
+    })
+  }, [route])
+
+  const ensureCustomLayers = useCallback((map: maplibregl.Map) => {
     if (!map.getSource('openseamap')) {
       map.addSource('openseamap', {
         type: 'raster',
@@ -176,10 +222,20 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, onMapCli
         type: 'circle',
         source: 'waypoints',
         paint: {
-          'circle-radius': 8,
-          'circle-color': '#ff6b6b',
+          'circle-radius': [
+            'case',
+            ['==', ['get', 'role'], 'start'], 10,
+            ['==', ['get', 'role'], 'destination'], 10,
+            7
+          ],
+          'circle-color': [
+            'case',
+            ['==', ['get', 'role'], 'start'], '#22d3ee',
+            ['==', ['get', 'role'], 'destination'], '#f97316',
+            '#f8fafc'
+          ],
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
+          'circle-stroke-color': '#0f172a'
         }
       })
     }
@@ -203,13 +259,15 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, onMapCli
           'line-cap': 'round'
         },
         paint: {
-          'line-color': '#4f46e5',
-          'line-width': 3,
-          'line-opacity': 0.8
+          'line-color': '#38bdf8',
+          'line-width': 3.5,
+          'line-opacity': 0.92
         }
       })
     }
-  }
+    updateWaypointSource(map)
+    updateRouteSource(map)
+  }, [showOpenSeaMap, updateWaypointSource, updateRouteSource])
 
   useEffect(() => {
     if (!mapRef.current) return
@@ -269,54 +327,15 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, onMapCli
 
   // Update waypoints visualization
   useEffect(() => {
-    if (!mapInstance.current || !mapInstance.current.getSource('waypoints')) return;
-
-    const waypointFeatures = waypoints.map((wp, index) => ({
-      type: 'Feature' as const,
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [wp.lon, wp.lat]
-      },
-      properties: {
-        id: index,
-        label: `Waypoint ${index + 1}`
-      }
-    }));
-
-    (mapInstance.current.getSource('waypoints') as maplibregl.GeoJSONSource).setData({
-      type: 'FeatureCollection',
-      features: waypointFeatures
-    });
-  }, [waypoints]);
+    if (!mapInstance.current) return;
+    updateWaypointSource(mapInstance.current);
+  }, [waypoints, updateWaypointSource]);
 
   // Update route visualization
   useEffect(() => {
-    if (!mapInstance.current || !mapInstance.current.getSource('route')) return;
-
-    if (route.length < 2) {
-      (mapInstance.current.getSource('route') as maplibregl.GeoJSONSource).setData({
-        type: 'FeatureCollection',
-        features: []
-      });
-      return;
-    }
-
-    const routeFeature = {
-      type: 'Feature' as const,
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: route.map(point => [point.lon, point.lat])
-      },
-      properties: {
-        name: 'Calculated Route'
-      }
-    };
-
-    (mapInstance.current.getSource('route') as maplibregl.GeoJSONSource).setData({
-      type: 'FeatureCollection',
-      features: [routeFeature]
-    });
-  }, [route]);
+    if (!mapInstance.current) return;
+    updateRouteSource(mapInstance.current);
+  }, [route, updateRouteSource]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -342,10 +361,10 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, onMapCli
         fontWeight: '500'
       }}>
         {waypoints.length === 0 
-          ? 'Click on the map to select waypoints' 
+          ? 'Click anywhere to set your departure point' 
           : waypoints.length === 1 
-            ? 'Click to add destination, then calculate route'
-            : 'Ready to calculate route'
+            ? 'Click again to choose a destination – route will auto generate'
+            : 'Route generated. Click Clear to start over'
         }
       </div>
 

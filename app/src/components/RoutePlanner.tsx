@@ -9,13 +9,17 @@ interface Waypoint {
 
 interface RoutePlannerProps {
   waypoints: Waypoint[]
+  routeResult?: {
+    mode: string
+    waypoints: { lat: number; lon: number; time?: number }[]
+  } | null
   onWaypointAdd: (coords: { lat: number; lon: number }) => void
   onWaypointRemove: (id: string) => void
   onClearWaypoints?: () => void
   onRoutePlan: () => void
 }
 
-const RoutePlanner = ({ waypoints, onWaypointAdd, onWaypointRemove, onClearWaypoints, onRoutePlan }: RoutePlannerProps) => {
+const RoutePlanner = ({ waypoints, routeResult, onWaypointAdd, onWaypointRemove, onClearWaypoints, onRoutePlan }: RoutePlannerProps) => {
   const [departureTime, setDepartureTime] = useState(new Date().toISOString().slice(0, 16))
   const [pendingLat, setPendingLat] = useState('')
   const [pendingLon, setPendingLon] = useState('')
@@ -240,8 +244,39 @@ const RoutePlanner = ({ waypoints, onWaypointAdd, onWaypointRemove, onClearWaypo
           }}
         >
           Clear
-        </button>
-      </div>
+      </button>
+    </div>
+
+      {routeResult?.waypoints && routeResult.waypoints.length > 0 && (
+        <div style={{
+          marginTop: '16px',
+          paddingTop: '16px',
+          borderTop: '1px solid var(--glass-border)'
+        }}>
+          <div style={{
+            fontSize: '12px',
+            color: 'var(--cyan-400)',
+            fontWeight: 600,
+            marginBottom: '8px'
+          }}>
+            Computed Route ({routeResult.mode})
+          </div>
+          <div style={{ maxHeight: '160px', overflowY: 'auto', fontSize: '11px', color: 'var(--silver-200)' }}>
+            {routeResult.waypoints.map((wp, idx) => (
+              <div key={`${wp.lat}-${wp.lon}-${idx}`} style={{
+                padding: '6px 0',
+                borderBottom: '1px solid rgba(148, 163, 184, 0.15)'
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--white)' }}>
+                  {idx === 0 ? 'Departure' : idx === routeResult.waypoints.length - 1 ? 'Destination' : `Waypoint ${idx}`}
+                </div>
+                <div>Lat: {wp.lat.toFixed(3)}°, Lon: {wp.lon.toFixed(3)}°</div>
+                {wp.time !== undefined && <div>ETA: {wp.time.toFixed(1)} hrs</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
