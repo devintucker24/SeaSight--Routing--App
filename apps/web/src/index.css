@@ -1,0 +1,397 @@
+/* Reset and layout */
+html, body, #root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: #020B1A;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Montserrat Alternates', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* MapLibre default container will fill parent */
+
+/* Theme variables */
+:root {
+  --navy-900: #020B1A;
+  --navy-800: #07152B;
+  --navy-700: #0b213f;
+  --cyan-500: #1BE4F2;
+  --cyan-400: #49F2FF;
+  --silver-300: #BFC7D1;
+  --silver-200: #D9DEE6;
+  --white: #ffffff;
+  --glass-bg: rgba(2, 11, 26, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glow: 0 0 12px rgba(27, 228, 242, 0.35);
+}
+
+/* Core map canvas gridlines overlay */
+.map-grid-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px;
+  mix-blend-mode: overlay;
+}
+
+/* Glass card/panel */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Floating Nav Bar */
+.nav-bar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  color: var(--white);
+  border-radius: 999px;
+  background: rgba(2, 11, 26, 0.45);
+  border: 1px solid var(--glass-border);
+}
+.nav-brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.nav-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--silver-200);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  transition: all .15s ease;
+}
+.nav-icon-btn:hover, .nav-icon-btn.active {
+  color: var(--white);
+  box-shadow: var(--glow);
+  border-color: rgba(73,242,255,0.5);
+}
+
+/* Slide Panels */
+.slide-panel {
+  position: absolute;
+  top: 72px;
+  bottom: 20px;
+  width: 340px;
+  color: var(--white);
+  overflow: hidden;
+}
+.slide-panel.left { left: -310px; }
+.slide-panel.right { right: -310px; }
+.slide-panel.open.left { left: 20px; }
+.slide-panel.open.right { right: 20px; }
+.slide-panel-content {
+  height: 100%;
+  padding: 14px 14px 16px 14px;
+}
+.slide-tab {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(27, 228, 242, 0.12);
+  border: 1px solid rgba(27, 228, 242, 0.4);
+  color: var(--cyan-400);
+  cursor: pointer;
+}
+.slide-tab:hover { box-shadow: var(--glow); }
+.slide-tab.left { left: 6px; }
+.slide-tab.right { right: 6px; }
+
+/* Layer toggles vertical stack */
+.layer-toggles {
+  position: absolute;
+  right: 20px;
+  top: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: right 0.3s ease;
+  z-index: 999;
+}
+.layer-toggles.right-panel-open {
+  right: 380px;
+}
+.layer-toggle-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--silver-200);
+  background: rgba(2, 11, 26, 0.45);
+  border: 1px solid var(--glass-border);
+  transition: all .15s ease;
+  cursor: pointer;
+}
+.layer-toggle-btn.active {
+  color: var(--white);
+  box-shadow: var(--glow);
+  border-color: rgba(73,242,255,0.5);
+}
+.layer-toggle-btn:hover { 
+  color: var(--white); 
+  transform: scale(1.05);
+}
+
+/* Status ledger */
+.status-ledger {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  min-width: 240px;
+  max-width: 300px;
+  padding: 12px 14px;
+  color: var(--white);
+  z-index: 1000;
+}
+.status-ledger.left-panel-open { left: 380px; }
+
+.status-row { 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  margin: 6px 0; 
+}
+.status-metric { 
+  color: var(--cyan-400); 
+  font-weight: 600; 
+}
+
+/* Action dock (mobile) */
+.action-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  z-index: 1000;
+}
+.dock-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--silver-200);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.dock-btn:hover {
+  color: var(--white);
+  transform: scale(1.05);
+}
+.dock-btn.active { 
+  color: var(--white); 
+  box-shadow: var(--glow); 
+  border-color: rgba(73,242,255,0.5); 
+}
+.dock-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Map style controls */
+.map-style-controls {
+  position: absolute;
+  top: 96px;
+  left: 20px;
+  z-index: 1000;
+  padding: 12px 14px;
+  min-width: 200px;
+  max-width: 250px;
+}
+.map-style-controls.left-panel-open { left: 380px; }
+
+/* Clear waypoints button */
+.clear-dropdown {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  z-index: 1100;
+}
+
+.clear-waypoints-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(239,68,68,0.9);
+  color: white;
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+.clear-waypoints-btn:hover { background: rgba(239,68,68,1); }
+.clear-waypoints-btn:disabled { background: rgba(2, 11, 26, 0.45); cursor: not-allowed; }
+
+.clear-dropdown:hover .clear-dropdown-menu { opacity: 1; pointer-events: auto; transform: translateY(6px); }
+
+.clear-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 6px;
+  min-width: 180px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.clear-dropdown-menu button {
+  background: rgba(255,255,255,0.04);
+  color: var(--white);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.clear-dropdown-menu button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  /* Map style controls - mobile */
+  .map-style-controls {
+    top: 80px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    min-width: unset;
+    max-width: none;
+  }
+  .map-style-controls.left-panel-open { left: 10px; }
+  
+  /* Layer toggles - mobile */
+  .layer-toggles {
+    top: 80px;
+    right: 10px;
+    flex-direction: row;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  
+  /* Status ledger - mobile */
+  .status-ledger {
+    bottom: 80px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    min-width: unset;
+    max-width: none;
+  }
+  .status-ledger.left-panel-open { left: 10px; }
+  
+  /* Clear button - mobile */
+  .clear-waypoints-btn {
+    bottom: 80px;
+    right: 10px;
+  }
+  
+  /* Slide panels - mobile */
+  .slide-panel {
+    width: calc(100vw - 20px);
+    left: -100vw;
+    right: auto;
+  }
+  .slide-panel.open.left {
+    left: 10px;
+  }
+  .slide-panel.open.right {
+    right: 10px;
+    left: auto;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .layer-toggles.right-panel-open {
+    right: 360px;
+  }
+  
+  .slide-panel {
+    width: 320px;
+  }
+}
+
+/* Accessibility Improvements */
+.layer-toggle-btn:focus,
+.dock-btn:focus,
+.clear-waypoints-btn:focus,
+.slide-tab:focus {
+  outline: 2px solid var(--cyan-400);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .glass-panel {
+    background: rgba(0, 0, 0, 0.95);
+    border: 2px solid var(--white);
+  }
+  
+  .layer-toggle-btn.active,
+  .dock-btn.active {
+    background: var(--cyan-400);
+    color: var(--navy-900);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .slide-panel,
+  .layer-toggles,
+  .dock-btn,
+  .layer-toggle-btn,
+  .clear-waypoints-btn {
+    transition: none;
+  }
+}
+
+/* Focus visible for better keyboard navigation */
+.layer-toggle-btn:focus-visible,
+.dock-btn:focus-visible,
+.clear-waypoints-btn:focus-visible,
+.slide-tab:focus-visible {
+  outline: 2px solid var(--cyan-400);
+  outline-offset: 2px;
+  box-shadow: var(--glow);
+}
+
+/* Remove Mobile Bottom Bar overrides and keep action dock visible */
+.mobile-bottom-bar {
+  display: none;
+}

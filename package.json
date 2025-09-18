@@ -1,0 +1,22 @@
+{
+  "name": "seasight-routing-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@seasight/web",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "build:router": "./scripts/build.sh --router-only",
+    "build:clean": "./scripts/build.sh --clean --install",
+    "build:full": "./scripts/build.sh --clean --install",
+    "setup:emsdk": "./tools/ci/setup-emsdk.sh",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules packages/router-core/build packages/router-wasm/dist",
+    "install:all": "npm install && npm run build:router"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  }
+}

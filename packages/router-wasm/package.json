@@ -1,0 +1,18 @@
+{
+  "name": "@seasight/router-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/SeaSightRouter.js",
+  "module": "dist/SeaSightRouter.js",
+  "types": "dist/SeaSightRouter.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/SeaSightRouter.d.ts",
+      "default": "./dist/SeaSightRouter.js"
+    }
+  },
+  "scripts": {
+    "build": "emcmake cmake -S ../router-core/src -B ../router-core/build && cmake --build ../router-core/build",
+    "postbuild": "mkdir -p dist && cp ../router-core/build/SeaSightRouter.js ../router-core/build/SeaSightRouter.wasm ./dist/ && cp src/SeaSightRouter.d.ts ./dist/"
+  }
+}

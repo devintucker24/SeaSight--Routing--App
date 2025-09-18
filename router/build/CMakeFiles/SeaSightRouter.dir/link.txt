@@ -1,1 +1,0 @@
-/Users/devintucker/SeaSight-Routing-App/emsdk/upstream/emscripten/em++ --shell-file "/Users/devintucker/SeaSight-Routing-App/router/shell_minimal.html" -s NO_EXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORT_NAME=SeaSightRouterModule -lembind @CMakeFiles/SeaSightRouter.dir/objects1.rsp -o SeaSightRouter.html

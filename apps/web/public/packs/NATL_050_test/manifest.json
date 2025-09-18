@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "region": "NATL_050",
+  "cycle_iso": "2025-09-15T13:00:00Z",
+  "grid": {
+    "lat0": 30.0,
+    "lat1": 60.0,
+    "lon0": -80.0,
+    "lon1": -10.0,
+    "d": 0.5
+  },
+  "times_iso": [
+    "2025-09-15T13:00:00Z"
+  ],
+  "fields": [
+    "wind_u",
+    "wind_v",
+    "wave_hs",
+    "wave_tp",
+    "wave_dir",
+    "cur_u",
+    "cur_v",
+    "mask_land",
+    "mask_shallow",
+    "mask_restricted"
+  ],
+  "parts": [
+    {
+      "idx": 0,
+      "bytes": 30885,
+      "sha256": "d17fd90504951d79cd2ec78e1923b3a79320d7274e0535b2e78f2647f207c760"
+    },
+    {
+      "idx": 1,
+      "bytes": 31312,
+      "sha256": "5075199930158edff484303b887abcaa6f66c15611f333b9de0ac3126a0ce777"
+    },
+    {
+      "idx": 2,
+      "bytes": 31271,
+      "sha256": "452cd857ddd60c7964cbd07e10e0cde7865da0eed1700bf98f224e17c6aa21bc"
+    },
+    {
+      "idx": 3,
+      "bytes": 30219,
+      "sha256": "820d4e0c2fed2cada2b43531c972d5328989b55d69bf02be8dd13707cc79eb99"
+    },
+    {
+      "idx": 4,
+      "bytes": 30635,
+      "sha256": "daa30554455b1b67ee73ec90ca823ca4f7f5e75d2b367b55c7fee3e951b68dbb"
+    },
+    {
+      "idx": 5,
+      "bytes": 30738,
+      "sha256": "e49f488f179d2f1a34414553485eea96f76be1fd72a8605b58cfeda1aa6e93be"
+    },
+    {
+      "idx": 6,
+      "bytes": 30602,
+      "sha256": "c2e872f531be55029d816a67e00d06046c93d07413585d1817c7fc0953e35493"
+    },
+    {
+      "idx": 7,
+      "bytes": 24,
+      "sha256": "35f2251dadd152171f65659e3c84512c79cb10fbe160ef927c869f2059bf1d3e"
+    },
+    {
+      "idx": 8,
+      "bytes": 19,
+      "sha256": "67df1238da908cd91f78bbfe88fc8acb6ad7685636e98e9944743de012999a36"
+    },
+    {
+      "idx": 9,
+      "bytes": 19,
+      "sha256": "f1419db4082b87605b230ec93d29a4a46b35fadc16aa86764bce68c0fb3ed65e"
+    }
+  ],
+  "masks": {
+    "land": "mask_land.bin.zst",
+    "shallow": "mask_shallow.bin.zst",
+    "restricted": "mask_restricted.bin.zst"
+  },
+  "signing": {
+    "alg": "ed25519",
+    "key_id": "pack-key-1",
+    "sig_base64": "H0dhf7FhzcgZd+xcdIAgHiQrFpYaxKCXocNpQD6t2fFWx2f/cs99g1zQRXpCDu5FG0ZXKZzKNmPnkALpcHAaAg=="
+  }
+}

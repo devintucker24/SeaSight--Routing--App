@@ -1,16 +1,22 @@
+import argparse
 import struct
 from pathlib import Path
 
-DATA_DIR = Path('data/geopolygondata')
-SHAPEFILE = DATA_DIR / 'GSHHS_i_L1.shp'
-OUTPUT = Path('app/public/land_mask.bin')
+DEFAULT_DATA_DIR = Path('data/geopolygondata')
+DEFAULT_SHAPEFILE = DEFAULT_DATA_DIR / 'GSHHS_i_L1.shp'
+DEFAULT_OUTPUT = Path('apps/web/public/land_mask.bin')
 
-LAT0 = -80.0
-LAT1 = 80.0
-LON0 = -180.0
-LON1 = 180.0
-DLAT = 0.5
-DLON = 0.5
+def parse_args():
+    parser = argparse.ArgumentParser(description='Rasterize land polygons into a binary land mask.')
+    parser.add_argument('--shapefile', type=Path, default=DEFAULT_SHAPEFILE, help='Input GSHHS shapefile path')
+    parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT, help='Output mask file path')
+    parser.add_argument('--lat0', type=float, default=-80.0, help='Minimum latitude bound')
+    parser.add_argument('--lat1', type=float, default=80.0, help='Maximum latitude bound')
+    parser.add_argument('--lon0', type=float, default=-180.0, help='Minimum longitude bound')
+    parser.add_argument('--lon1', type=float, default=180.0, help='Maximum longitude bound')
+    parser.add_argument('--dlat', type=float, default=0.5, help='Latitude resolution in degrees')
+    parser.add_argument('--dlon', type=float, default=0.5, help='Longitude resolution in degrees')
+    return parser.parse_args()
 
 # Basic shapefile polygon parser (2D, no Z/M)
 class Ring:
@@ -134,18 +140,18 @@ def read_polygons(path: Path):
     return polys
 
 
-def build_mask(polygons):
-    rows = int(round((LAT1 - LAT0) / DLAT)) + 1
-    cols = int(round((LON1 - LON0) / DLON)) + 1
+def build_mask(polygons, lat0, lat1, lon0, lon1, dlat, dlon):
+    rows = int(round((lat1 - lat0) / dlat)) + 1
+    cols = int(round((lon1 - lon0) / dlon)) + 1
     mask = [0] * (rows * cols)
 
     import math
 
     def lat_to_row(lat):
-        return int(math.floor((lat - LAT0) / DLAT))
+        return int(math.floor((lat - lat0) / dlat))
 
     def lon_to_col(lon):
-        return int(math.floor((lon - LON0) / DLON))
+        return int(math.floor((lon - lon0) / dlon))
 
     for poly in polygons:
         minx, miny, maxx, maxy = poly.bbox
@@ -154,28 +160,32 @@ def build_mask(polygons):
         c_start = max(0, lon_to_col(minx) - 1)
         c_end = min(cols - 1, lon_to_col(maxx) + 1)
         for r in range(r_start, r_end + 1):
-            lat = LAT0 + r * DLAT
+            lat = lat0 + r * dlat
             for c in range(c_start, c_end + 1):
                 idx = r * cols + c
                 if mask[idx]:
                     continue
-                lon = LON0 + c * DLON
+                lon = lon0 + c * dlon
                 if point_in_polygon((lon, lat), poly):
                     mask[idx] = 1
     return rows, cols, mask
 
 
 def main():
-    if not SHAPEFILE.exists():
-        raise SystemExit(f'Missing shapefile: {SHAPEFILE}')
-    polys = read_polygons(SHAPEFILE)
-    rows, cols, mask = build_mask(polys)
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT.open('wb') as f:
-        f.write(struct.pack('<6d', LAT0, LAT1, LON0, LON1, DLAT, DLON))
+    args = parse_args()
+    shapefile = args.shapefile
+    output = args.output
+    if not shapefile.exists():
+        raise SystemExit(f'Missing shapefile: {shapefile}')
+
+    polys = read_polygons(shapefile)
+    rows, cols, mask = build_mask(polys, args.lat0, args.lat1, args.lon0, args.lon1, args.dlat, args.dlon)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open('wb') as f:
+        f.write(struct.pack('<6d', args.lat0, args.lat1, args.lon0, args.lon1, args.dlat, args.dlon))
         f.write(struct.pack('<II', rows, cols))
         f.write(bytes(mask))
-    print(f'Wrote mask with {rows}x{cols} cells to {OUTPUT}')
+    print(f'Wrote mask with {rows}x{cols} cells to {output}')
 
 
 if __name__ == '__main__':
