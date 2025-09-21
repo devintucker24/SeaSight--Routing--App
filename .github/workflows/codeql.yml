@@ -66,13 +66,13 @@ jobs:
     # or others). This is typically only required for manual builds.
     # - name: Setup runtime (example)
     #   uses: actions/setup-example@v1
-    - name: Custom Build for C++
+    - name: Trace Build with CodeQL
       if: ${{ matrix.language == 'cpp' }}
       run: |
         source ./emsdk/emsdk_env.sh
         mkdir -p packages/router-core/build
         emcmake cmake -S packages/router-core/src -B packages/router-core/build
-        cmake --build packages/router-core/build
+        codeql database trace-command -- cmake --build packages/router-core/build
       working-directory: ${{ github.workspace }}
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
