@@ -67,7 +67,6 @@ jobs:
     # - name: Setup runtime (example)
     #   uses: actions/setup-example@v1
     - name: Trace Build with CodeQL
-      if: ${{ matrix.language == 'cpp' }}
       run: |
         source ./emsdk/emsdk_env.sh
         mkdir -p packages/router-core/build
