@@ -24,7 +24,6 @@ function App() {
     mapStyle,
     showOpenSeaMap,
     routingMode,
-    isochroneOpts,
     layers,
     waypointCount,
     mapWaypoints,
@@ -166,7 +165,6 @@ function App() {
         routingMode={routingMode}
         mapStyle={mapStyle}
         showOpenSeaMap={showOpenSeaMap}
-        isochroneOptions={isochroneOpts}
       />
 
       {/* Clear Waypoints Button - repositioned as top dropdown */}

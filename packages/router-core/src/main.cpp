@@ -630,6 +630,19 @@ private:
         settings.merge_radius_nm = getNumberAny(request, {"mergeRadiusNm", "merge_radius_nm"}, settings.merge_radius_nm);
         settings.goal_radius_nm = getNumberAny(request, {"goalRadiusNm", "goal_radius_nm"}, settings.goal_radius_nm);
         settings.max_hours = getNumberAny(request, {"maxHours", "max_hours"}, settings.max_hours);
+        settings.simplify_tolerance_nm = getNumberAny(request, {"simplifyToleranceNm", "simplify_tolerance_nm"}, settings.simplify_tolerance_nm);
+        settings.min_leg_nm = getNumberAny(request, {"minLegNm", "min_leg_nm"}, settings.min_leg_nm);
+        settings.min_heading_deg = getNumberAny(request, {"minHeadingDeg", "min_heading_deg"}, settings.min_heading_deg);
+        settings.bearing_window_deg = getNumberAny(request, {"bearingWindowDeg", "bearing_window_deg"}, settings.bearing_window_deg);
+        settings.beam_width = getIntAny(request, {"beamWidth", "beam_width"}, settings.beam_width);
+        settings.min_time_step_minutes = getNumberAny(request, {"minTimeStepMinutes", "min_time_step_minutes"}, settings.min_time_step_minutes);
+        settings.max_time_step_minutes = getNumberAny(request, {"maxTimeStepMinutes", "max_time_step_minutes"}, settings.max_time_step_minutes);
+        settings.complexity_threshold = getNumberAny(request, {"complexityThreshold", "complexity_threshold"}, settings.complexity_threshold);
+        settings.enable_adaptive_sampling = hasKey(request, "enableAdaptiveSampling") ? request["enableAdaptiveSampling"].as<bool>() : settings.enable_adaptive_sampling;
+        settings.enable_hierarchical_routing = hasKey(request, "enableHierarchicalRouting") ? request["enableHierarchicalRouting"].as<bool>() : settings.enable_hierarchical_routing;
+        settings.long_route_threshold_nm = getNumberAny(request, {"longRouteThresholdNm", "long_route_threshold_nm"}, settings.long_route_threshold_nm);
+        settings.coarse_grid_resolution_deg = getNumberAny(request, {"coarseGridResolutionDeg", "coarse_grid_resolution_deg"}, settings.coarse_grid_resolution_deg);
+        settings.corridor_width_nm = getNumberAny(request, {"corridorWidthNm", "corridor_width_nm"}, settings.corridor_width_nm);
 
         if (hasKey(request, "settings")) {
             emscripten::val settings_obj = request["settings"];
@@ -638,6 +651,19 @@ private:
             settings.merge_radius_nm = getNumberAny(settings_obj, {"mergeRadiusNm", "merge_radius_nm"}, settings.merge_radius_nm);
             settings.goal_radius_nm = getNumberAny(settings_obj, {"goalRadiusNm", "goal_radius_nm"}, settings.goal_radius_nm);
             settings.max_hours = getNumberAny(settings_obj, {"maxHours", "max_hours"}, settings.max_hours);
+            settings.simplify_tolerance_nm = getNumberAny(settings_obj, {"simplifyToleranceNm", "simplify_tolerance_nm"}, settings.simplify_tolerance_nm);
+            settings.min_leg_nm = getNumberAny(settings_obj, {"minLegNm", "min_leg_nm"}, settings.min_leg_nm);
+            settings.min_heading_deg = getNumberAny(settings_obj, {"minHeadingDeg", "min_heading_deg"}, settings.min_heading_deg);
+            settings.bearing_window_deg = getNumberAny(settings_obj, {"bearingWindowDeg", "bearing_window_deg"}, settings.bearing_window_deg);
+            settings.beam_width = getIntAny(settings_obj, {"beamWidth", "beam_width"}, settings.beam_width);
+            settings.min_time_step_minutes = getNumberAny(settings_obj, {"minTimeStepMinutes", "min_time_step_minutes"}, settings.min_time_step_minutes);
+            settings.max_time_step_minutes = getNumberAny(settings_obj, {"maxTimeStepMinutes", "max_time_step_minutes"}, settings.max_time_step_minutes);
+            settings.complexity_threshold = getNumberAny(settings_obj, {"complexityThreshold", "complexity_threshold"}, settings.complexity_threshold);
+            settings.enable_adaptive_sampling = hasKey(settings_obj, "enableAdaptiveSampling") ? settings_obj["enableAdaptiveSampling"].as<bool>() : settings.enable_adaptive_sampling;
+            settings.enable_hierarchical_routing = hasKey(settings_obj, "enableHierarchicalRouting") ? settings_obj["enableHierarchicalRouting"].as<bool>() : settings.enable_hierarchical_routing;
+            settings.long_route_threshold_nm = getNumberAny(settings_obj, {"longRouteThresholdNm", "long_route_threshold_nm"}, settings.long_route_threshold_nm);
+            settings.coarse_grid_resolution_deg = getNumberAny(settings_obj, {"coarseGridResolutionDeg", "coarse_grid_resolution_deg"}, settings.coarse_grid_resolution_deg);
+            settings.corridor_width_nm = getNumberAny(settings_obj, {"corridorWidthNm", "corridor_width_nm"}, settings.corridor_width_nm);
         }
         parsed.settings = settings;
 
@@ -747,9 +773,35 @@ private:
             waypoint.set("lat", wp.lat);
             waypoint.set("lon", wp.lon);
             waypoint.set("time", wp.time_hours);
+            waypoint.set("headingDeg", wp.heading_deg);
+            waypoint.set("isCourseChange", wp.is_course_change);
+            waypoint.set("maxWaveHeightM", wp.max_wave_height_m);
+            waypoint.set("hazardFlags", wp.hazard_flags);
             waypoint_array.set(static_cast<unsigned>(i), waypoint);
         }
         output.set("waypoints", waypoint_array);
+
+        emscripten::val waypoint_raw_array = emscripten::val::array();
+        for (std::size_t i = 0; i < result.waypoints_raw.size(); ++i) {
+            const auto& wp = result.waypoints_raw[i];
+            emscripten::val waypoint = emscripten::val::object();
+            waypoint.set("lat", wp.lat);
+            waypoint.set("lon", wp.lon);
+            waypoint.set("time", wp.time_hours);
+            waypoint.set("headingDeg", wp.heading_deg);
+            waypoint.set("isCourseChange", wp.is_course_change);
+            waypoint.set("maxWaveHeightM", wp.max_wave_height_m);
+            waypoint.set("hazardFlags", wp.hazard_flags);
+            waypoint_raw_array.set(static_cast<unsigned>(i), waypoint);
+        }
+        output.set("waypointsRaw", waypoint_raw_array);
+
+        emscripten::val index_map_array = emscripten::val::array();
+        for (std::size_t i = 0; i < result.index_map.size(); ++i) {
+            index_map_array.set(static_cast<unsigned>(i), result.index_map[i]);
+        }
+        output.set("indexMap", index_map_array);
+
         output.set("eta", result.diagnostics.eta_hours);
 
         emscripten::val diagnostics = emscripten::val::object();
@@ -763,6 +815,7 @@ private:
         diagnostics.set("etaHours", result.diagnostics.eta_hours);
         diagnostics.set("hazardFlags", result.diagnostics.hazard_flags);
         output.set("diagnostics", diagnostics);
+        output.set("isCoarseRoute", result.is_coarse_route);
 
         return output;
     }
@@ -1041,6 +1094,24 @@ public:
     bool crossesAntiMeridian(double lon1, double lon2) {
         return router->testCrossesAntiMeridian(lon1, lon2);
     }
+
+    // Function to get land mask data for visualization
+    emscripten::val getLandMaskData() const {
+        emscripten::val result = emscripten::val::object();
+        result.set("loaded", land_mask.loaded);
+        if (land_mask.loaded) {
+            result.set("lat0", land_mask.lat0);
+            result.set("lat1", land_mask.lat1);
+            result.set("lon0", land_mask.lon0);
+            result.set("lon1", land_mask.lon1);
+            result.set("d_lat", land_mask.d_lat);
+            result.set("d_lon", land_mask.d_lon);
+            result.set("rows", land_mask.rows);
+            result.set("cols", land_mask.cols);
+            result.set("cells", emscripten::val(emscripten::typed_memory_view(land_mask.cells.size(), land_mask.cells.data())));
+        }
+        return result;
+    }
 };
 
 EMSCRIPTEN_BINDINGS(seasight_router) {
@@ -1064,7 +1135,8 @@ EMSCRIPTEN_BINDINGS(seasight_router) {
         .function("sampleEnvironment", &RouterWrapper::sampleEnvironment)
         .function("greatCircleDistance", &RouterWrapper::greatCircleDistance)
         .function("normalizeLongitude", &RouterWrapper::normalizeLongitude)
-        .function("crossesAntiMeridian", &RouterWrapper::crossesAntiMeridian);
+        .function("crossesAntiMeridian", &RouterWrapper::crossesAntiMeridian)
+        .function("getLandMaskData", &RouterWrapper::getLandMaskData);
 
     emscripten::register_vector<std::uint8_t>("vector<uint8_t>");
 }

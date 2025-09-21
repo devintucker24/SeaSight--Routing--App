@@ -13,6 +13,10 @@ export interface Waypoint {
   lat: number;
   lon: number;
   time?: number;
+  headingDeg?: number;
+  isCourseChange?: boolean;
+  maxWaveHeightM?: number;
+  hazardFlags?: number;
 }
 
 export interface Diagnostics {
@@ -48,6 +52,8 @@ export interface EnvironmentSample {
 export interface IsochroneResult {
   mode: 'ISOCHRONE';
   waypoints: Waypoint[];
+  waypointsRaw: Waypoint[];
+  indexMap: number[];
   eta: number;
   diagnostics: Diagnostics;
 }

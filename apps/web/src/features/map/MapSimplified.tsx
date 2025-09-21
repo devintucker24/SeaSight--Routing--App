@@ -1,8 +1,7 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { useRouter } from '@features/route-planner/hooks/useRouter'
-import type { LatLonPosition, RoutingMode, IsochroneOptions, RouteResponse } from '@features/route-planner/services/RouterService'
+import { routerService, type LatLonPosition, type RoutingMode, type IsochroneOptions, type RouteResponse, type LandMaskData } from '@features/route-planner/services/RouterService'
 import { MAP_STYLES } from '@shared/constants'
 import { debugRouter } from '@shared/dev'
 
@@ -60,23 +59,6 @@ export interface MapRef {
 
 /**
  * MapSimplified - Main map component with routing capabilities
- * 
- * A React component that renders an interactive map using MapLibre GL JS.
- * Supports waypoint management, route calculation, and various map overlays.
- * 
- * @param waypoints - Array of waypoints to display on the map
- * @param route - Calculated route coordinates to visualize
- * @param onMapClick - Callback when map is clicked (receives [lng, lat])
- * @param onMapLoad - Callback when map is loaded (receives map instance)
- * @param onWaypointAdd - Callback when a waypoint is added
- * @param onRouteCalculated - Callback when route is calculated
- * @param onRouteSolved - Callback when route solving is complete
- * @param onClearRoute - Callback when route is cleared
- * @param routingMode - Routing algorithm mode ('ASTAR' or 'ISOCHRONE')
- * @param mapStyle - Map style to use ('openfreemap-liberty' or 'dark-maritime')
- * @param showOpenSeaMap - Whether to show OpenSeaMap overlay
- * @param isochroneOptions - Options for isochrone routing
- * @returns JSX element containing the map
  */
 const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWaypoints = [], onMapClick, onMapLoad, onWaypointAdd, onRouteCalculated, onRouteSolved, onClearRoute, routingMode = 'ASTAR', mapStyle: mapStyleProp = 'dark-maritime', showOpenSeaMap: showOpenSeaMapProp = true, isochroneOptions }, ref) => {
   const mapRef = useRef<HTMLDivElement | null>(null)
@@ -85,6 +67,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
   // Internal map view state to prevent re-centering on re-renders
   const [currentCenter, setCurrentCenter] = useState<[number, number]>([-70.9, 42.35])
   const [currentZoom, setCurrentZoom] = useState(6)
+  const [isMapReady, setIsMapReady] = useState(false); // New state to track map readiness
 
   // Router integration
   const {
@@ -93,6 +76,11 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
     solveRoute,
     setSafetyCaps
   } = useRouter()
+
+  const [showRawRoute, setShowRawRoute] = useState(false);
+  const [rawRouteData, setRawRouteData] = useState<LatLonPosition[]>([]);
+  const [showLandMask, setShowLandMask] = useState(false);
+  const [landMaskData, setLandMaskData] = useState<LandMaskData | null>(null);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -118,7 +106,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
 
         // Set default safety caps
         setSafetyCaps({
-          maxWaveHeight: 8.0,
+          maxWaveHeight: 6.0,
           maxHeadingChange: 30.0,
           minWaterDepth: 15.0
         });
@@ -128,7 +116,29 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
     };
 
     initializeRouterService();
-  }, [initializeRouter, setSafetyCaps]); // Dependencies for router initialization
+  }, [initializeRouter, setSafetyCaps]);
+
+  // Load land mask data from router
+  const loadLandMaskData = useCallback(async () => {
+    try {
+      const data = await routerService.getLandMaskData();
+      if (data && data.loaded) {
+        setLandMaskData(data);
+        console.log('Land mask data loaded:', data);
+      } else {
+        console.warn('Land mask data not available');
+      }
+    } catch (error) {
+      console.error('Failed to load land mask data:', error);
+    }
+  }, []);
+
+  // Load land mask data when router is initialized
+  useEffect(() => {
+    if (isInitialized) {
+      loadLandMaskData();
+    }
+  }, [isInitialized, loadLandMaskData]);
 
   // Handle map clicks for waypoint selection with bounds guard
   const handleMapClick = useCallback((lngLat: [number, number]) => {
@@ -156,9 +166,6 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
       if (routingMode === 'ISOCHRONE' && (res.waypoints?.length ?? 0) <= 1) {
         console.warn('[SeaSight] Isochrone solver returned a single waypoint. Check land/depth masks or provide wider start/end separation.')
       }
-      if (routingMode === 'ISOCHRONE' && (res.diagnostics?.hazardFlags ?? 0) & 0x1) {
-        console.warn('[SeaSight] Route crosses segments exceeding configured wave limits. Informing user while continuing.');
-      }
       let path = res.waypoints
       if (path.length < 2) {
         path = [start, end]
@@ -166,14 +173,17 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
       const coords = path.map(({ lat, lon }) => ({ lat, lon }))
       onRouteCalculated?.(coords)
       onRouteSolved?.(res)
-    } catch (err) {
-      if (err instanceof Error && err.message === 'ISOCHRONE_NO_ROUTE' && routingMode === 'ISOCHRONE') {
-        console.warn('[SeaSight] Isochrone aborted: safety caps prevented route expansion.');
-        onRouteCalculated?.([])
-        onRouteSolved?.(null)
-        setIsCalculating(false)
-        return
+      setRawRouteData((res.waypointsRaw ?? []).map(({ lat, lon }) => ({ lat, lon })));
+      console.log("Full Route Response:", res);
+
+      // --- ADD THIS BLOCK FOR COMPARISON TOOL ---
+      if (res && res.mode === 'ISOCHRONE') {
+        const comparison = routerService.compareWithStraightRoute(res);
+        console.log("Route Comparison (Isochrone vs. Straight):", comparison);
       }
+      // --- END ADDITION ---
+
+    } catch (err) {
       const start = waypoints[0]
       const end = waypoints[waypoints.length - 1]
       onRouteCalculated?.([start, end])
@@ -238,7 +248,10 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
   const updateRouteSource = useCallback((map: maplibregl.Map) => {
     const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined
     if (!source) return
-    if (route.length < 2) {
+    
+    const currentRouteData = showRawRoute ? rawRouteData : route;
+
+    if (currentRouteData.length < 2) {
       source.setData({ type: 'FeatureCollection', features: [] })
       return
     }
@@ -249,123 +262,94 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
           type: 'Feature' as const,
           geometry: {
             type: 'LineString' as const,
-            coordinates: route.map(point => [point.lon, point.lat])
+            coordinates: currentRouteData.map(point => [point.lon, point.lat])
           },
           properties: {}
         }
       ]
     })
-  }, [route])
+  }, [route, rawRouteData, showRawRoute])
 
-  const ensureCustomLayers = useCallback((map: maplibregl.Map) => {
-    if (!map.getSource('openseamap')) {
-      map.addSource('openseamap', {
+  // Create land mask layer once data is available
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !isMapReady || !landMaskData || !landMaskData.loaded || map.getSource('land-mask-image-source')) {
+      return;
+    }
+    
+    console.log('Setting up land mask layer for the first time.');
+
+    const { lat0, lon0, lat1, lon1, rows, cols, cells } = landMaskData;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = cols;
+    canvas.height = rows;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const imageData = ctx.createImageData(cols, rows);
+    const data = imageData.data;
+
+    // Fill the ImageData with the land mask data, flipping the rows vertically
+    // The source `cells` data is ordered from South to North (bottom-to-top),
+    // but canvas ImageData is drawn from top-to-bottom.
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        // Source index from bottom-to-top
+        const srcIndex = y * cols + x;
+        // Destination index from top-to-bottom
+        const destRow = rows - 1 - y;
+        const destIndex = (destRow * cols + x) * 4;
+        
+        const isLand = cells[srcIndex] !== 0;
+        if (isLand) {
+          data[destIndex] = 255;     // R
+          data[destIndex + 1] = 107; // G
+          data[destIndex + 2] = 107; // B
+          data[destIndex + 3] = 77;  // Alpha (0.3 * 255)
+        }
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    const imageUrl = canvas.toDataURL();
+    const coordinates: [[number, number], [number, number], [number, number], [number, number]] = [
+      [lon0, lat1], // Top-left
+      [lon1, lat1], // Top-right
+      [lon1, lat0], // Bottom-right
+      [lon0, lat0]  // Bottom-left
+    ];
+
+    if (!map.getSource('land-mask-image-source')) {
+      map.addSource('land-mask-image-source', {
+        type: 'image',
+        url: imageUrl,
+        coordinates: coordinates
+      });
+    }
+    
+    if (!map.getLayer('land-mask-image-layer')) {
+      map.addLayer({
+        id: 'land-mask-image-layer',
         type: 'raster',
-        tiles: [
-          'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'
-        ],
-        tileSize: 256,
-        attribution: '© OpenSeaMap contributors'
-      })
+        source: 'land-mask-image-source',
+        paint: { 'raster-opacity': 0.8 },
+        layout: { 'visibility': 'none' } // Initially hidden
+      });
     }
-    if (!map.getLayer('openseamap-overlay')) {
-      map.addLayer({
-        id: 'openseamap-overlay',
-        type: 'raster',
-        source: 'openseamap',
-        paint: {
-          'raster-opacity': showOpenSeaMapProp ? 0.7 : 0
-        }
-      })
-    } else {
-      map.setPaintProperty('openseamap-overlay', 'raster-opacity', showOpenSeaMapProp ? 0.7 : 0)
-    }
+  }, [landMaskData, isMapReady]);
 
-    if (!map.getSource('waypoints')) {
-      map.addSource('waypoints', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: []
-        }
-      })
+  // Toggle land mask visibility
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (isMapReady && map?.getLayer('land-mask-image-layer')) {
+      map.setLayoutProperty(
+        'land-mask-image-layer',
+        'visibility',
+        showLandMask ? 'visible' : 'none'
+      );
     }
-    if (!map.getLayer('waypoints')) {
-      map.addLayer({
-        id: 'waypoints',
-        type: 'circle',
-        source: 'waypoints',
-        paint: {
-          'circle-radius': [
-            'case',
-            ['==', ['get', 'role'], 'start'], 10,
-            ['==', ['get', 'role'], 'destination'], 10,
-            7
-          ],
-          'circle-color': [
-            'case',
-            ['==', ['get', 'role'], 'start'], '#22d3ee',
-            ['==', ['get', 'role'], 'destination'], '#f97316',
-            '#f8fafc'
-          ],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#0f172a'
-        }
-      })
-    }
-
-    if (!map.getSource('isochrone-waypoints')) {
-      map.addSource('isochrone-waypoints', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: []
-        }
-      })
-    }
-    if (!map.getLayer('isochrone-waypoints')) {
-      map.addLayer({
-        id: 'isochrone-waypoints',
-        type: 'circle',
-        source: 'isochrone-waypoints',
-        paint: {
-          'circle-radius': 4,
-          'circle-color': '#0ea5e9',
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#0f172a'
-        }
-      })
-    }
-
-    if (!map.getSource('route')) {
-      map.addSource('route', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: []
-        }
-      })
-    }
-    if (!map.getLayer('route')) {
-      map.addLayer({
-        id: 'route',
-        type: 'line',
-        source: 'route',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': '#38bdf8',
-          'line-width': 3.5,
-          'line-opacity': 0.92
-        }
-      })
-    }
-    updateWaypointSource(map)
-    updateIsochroneWaypointSource(map)
-    updateRouteSource(map)
-  }, [showOpenSeaMapProp, updateWaypointSource, updateIsochroneWaypointSource, updateRouteSource])
+  }, [showLandMask, isMapReady]);
 
   // Map initialization (runs only once on component mount)
   useEffect(() => {
@@ -373,16 +357,15 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
 
     const map = new maplibregl.Map({
       container: mapRef.current,
-      style: MAP_STYLES[mapStyleProp].url, // Use prop for initial style
-      center: currentCenter, // Use internal state
-      zoom: currentZoom,     // Use internal state
+      style: MAP_STYLES[mapStyleProp].url,
+      center: currentCenter,
+      zoom: currentZoom,
       maxZoom: 18,
       minZoom: 1,
     })
 
     mapInstance.current = map
 
-    // Store current view state on map move/zoom
     const onMoveEnd = () => {
       setCurrentCenter(map.getCenter().toArray() as [number, number]);
       setCurrentZoom(map.getZoom());
@@ -393,34 +376,84 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
     };
     map.on('zoomend', onZoomEnd);
 
-    // Add maritime-specific controls
     map.addControl(new maplibregl.NavigationControl({
       showCompass: true,
       showZoom: true,
       visualizePitch: true
     }), 'top-right')
 
-    // Add scale control with nautical units
     map.addControl(new maplibregl.ScaleControl({
       maxWidth: 100,
       unit: 'nautical'
     }), 'bottom-left')
 
-    // Add fullscreen control
     map.addControl(new maplibregl.FullscreenControl(), 'top-right')
 
-    // Handle map clicks
     map.on('click', (e) => {
       handleMapClick([e.lngLat.lng, e.lngLat.lat])
     })
 
-    // On load ensure our custom layers exist
     map.on('load', () => {
-      ensureCustomLayers(map)
+      console.log('Map fired "load" event. Setting up initial sources and layers.');
+      
+      // Add OpenSeaMap
+      map.addSource('openseamap', {
+        type: 'raster',
+        tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© OpenSeaMap contributors'
+      });
+      map.addLayer({
+        id: 'openseamap-overlay',
+        type: 'raster',
+        source: 'openseamap',
+        paint: { 'raster-opacity': showOpenSeaMapProp ? 0.7 : 0 }
+      });
+
+      // Add Waypoints source and layer
+      map.addSource('waypoints', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'waypoints',
+        type: 'circle',
+        source: 'waypoints',
+        paint: {
+          'circle-radius': ['case', ['==', ['get', 'role'], 'start'], 10, ['==', ['get', 'role'], 'destination'], 10, 7],
+          'circle-color': ['case', ['==', ['get', 'role'], 'start'], '#22d3ee', ['==', ['get', 'role'], 'destination'], '#f97316', '#f8fafc'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#0f172a'
+        }
+      });
+
+      // Add Isochrone Waypoints source and layer
+      map.addSource('isochrone-waypoints', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'isochrone-waypoints',
+        type: 'circle',
+        source: 'isochrone-waypoints',
+        paint: {
+          'circle-radius': 4,
+          'circle-color': '#0ea5e9',
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#0f172a'
+        }
+      });
+
+      // Add Route source and layer
+      map.addSource('route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#38bdf8', 'line-width': 3.5, 'line-opacity': 0.92 }
+      });
+
+      setIsMapReady(true); // Signal that the map is ready for updates
+
       if (onMapLoad) {
         onMapLoad(map)
       }
-    })
+    });
 
     // Cleanup on component unmount
     return () => {
@@ -428,7 +461,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
       map.off('zoomend', onZoomEnd);
       map.remove()
     }
-  }, []) // Empty dependency array means this runs only once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effect to update map style when mapStyleProp changes
   useEffect(() => {
@@ -436,6 +469,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
     if (!map) return;
     const newStyleUrl = MAP_STYLES[mapStyleProp].url;
     try {
+      setIsMapReady(false); // Map will reload, so it's not ready
       map.setStyle(newStyleUrl);
     } catch (_) {
       // noop - setStyle can throw if map is mid-update; next tick will apply
@@ -444,45 +478,87 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
 
   // Effect to update OpenSeaMap overlay opacity when showOpenSeaMapProp changes
   useEffect(() => {
-    if (mapInstance.current && mapInstance.current.getLayer('openseamap-overlay')) {
+    if (isMapReady && mapInstance.current?.getLayer('openseamap-overlay')) {
       mapInstance.current.setPaintProperty('openseamap-overlay', 'raster-opacity', showOpenSeaMapProp ? 0.7 : 0);
     }
-  }, [showOpenSeaMapProp]);
+  }, [showOpenSeaMapProp, isMapReady]);
 
   // Update waypoints visualization
   useEffect(() => {
-    if (!mapInstance.current) return;
-    updateWaypointSource(mapInstance.current);
-  }, [waypoints, updateWaypointSource]);
+    if (isMapReady && mapInstance.current) {
+      updateWaypointSource(mapInstance.current);
+    }
+  }, [waypoints, isMapReady, updateWaypointSource]);
 
   // Update route visualization
   useEffect(() => {
-    if (!mapInstance.current) return;
-    updateRouteSource(mapInstance.current);
-  }, [route, updateRouteSource]);
+    if (isMapReady && mapInstance.current) {
+      updateRouteSource(mapInstance.current);
+    }
+  }, [route, rawRouteData, showRawRoute, isMapReady, updateRouteSource]);
 
   // Update solver waypoint markers
   useEffect(() => {
-    if (!mapInstance.current) return;
-    updateIsochroneWaypointSource(mapInstance.current);
-  }, [routeWaypoints, updateIsochroneWaypointSource]);
-
-  // Effect to re-add custom layers when map style changes dynamically
-  useEffect(() => {
-    const map = mapInstance.current;
-    if (!map) return;
-    const handler = () => {
-      ensureCustomLayers(map);
-    };
-    map.on('styledata', handler);
-    return () => {
-      map.off('styledata', handler);
-    };
-  }, [ensureCustomLayers]);
-
+    if (isMapReady && mapInstance.current) {
+      updateIsochroneWaypointSource(mapInstance.current);
+    }
+  }, [routeWaypoints, isMapReady, updateIsochroneWaypointSource]);
+  
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+      
+      {/* Debug Toggle for Raw Route */}
+      <div style={{
+        position: 'absolute',
+        top: '10px',
+        left: '10px',
+        background: 'var(--glass-bg)',
+        padding: '8px',
+        borderRadius: '8px',
+        zIndex: 1001,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid var(--glass-border)',
+        color: 'var(--white)',
+        fontSize: '12px',
+        fontWeight: '500'
+      }}>
+        <input
+          type="checkbox"
+          id="showRawRouteToggle"
+          checked={showRawRoute}
+          onChange={(e) => setShowRawRoute(e.target.checked)}
+          style={{ accentColor: '#38bdf8' }}
+        />
+        <label htmlFor="showRawRouteToggle">Show Raw Route (Debug)</label>
+      </div>
+
+      {/* Land Mask Toggle */}
+      <div style={{
+        position: 'absolute',
+        top: '50px',
+        left: '10px',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '8px',
+        padding: '8px 12px',
+        color: 'var(--text-primary)',
+        fontSize: '12px',
+        fontWeight: '500'
+      }}>
+        <input
+          type="checkbox"
+          id="showLandMaskToggle"
+          checked={showLandMask}
+          onChange={(e) => setShowLandMask(e.target.checked)}
+          style={{ accentColor: '#ff6b6b' }}
+        />
+        <label htmlFor="showLandMaskToggle">Show Land Mask (Debug)</label>
+      </div>
       
       {/* Grid overlay for maritime theme */}
       <div className="map-grid-overlay" />

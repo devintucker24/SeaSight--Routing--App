@@ -104,4 +104,4 @@
 - **Touch Controls**: Full touch support for mobile devices
 - **Responsive Panels**: UI panels adapt to screen size
 - **Gesture Support**: Pinch to zoom, drag to pan
-- **Mobile Optimized**: Touch-friendly button sizes and spacing
+- **Mobile Optimized**: Touch-friendly button sizes

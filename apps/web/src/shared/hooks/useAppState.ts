@@ -37,7 +37,6 @@ export const useAppState = () => {
   
   // Routing state
   const [routingMode, setRoutingMode] = useState<RoutingMode>('ASTAR');
-  const [isochroneOpts] = useState<IsochroneOptions>(DEFAULT_ISOCHRONE_OPTIONS);
   
   // Layer state
   const [layers, setLayers] = useState<MapLayer[]>(() =>
@@ -170,7 +169,6 @@ export const useAppState = () => {
     mapStyle,
     showOpenSeaMap,
     routingMode,
-    isochroneOpts,
     layers,
     
     // Computed

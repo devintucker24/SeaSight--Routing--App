@@ -1,6 +1,7 @@
 // Router Service for SeaSight Router WASM Integration
 import SeaSightRouterModule from '@seasight/router-wasm';
 import { loadPack, createEnvironmentSampler } from './PackLoader';
+import { DEFAULT_ISOCHRONE_OPTIONS } from '@shared/constants'; // Add this import
 
 export interface RouterConfig {
   lat0: number;
@@ -53,11 +54,27 @@ export interface IsochroneDiagnostics {
   hazardFlags?: number;
 }
 
+export interface LandMaskData {
+  loaded: boolean;
+  lat0: number;
+  lat1: number;
+  lon0: number;
+  lon1: number;
+  d_lat: number;
+  d_lon: number;
+  rows: number;
+  cols: number;
+  cells: Uint8Array;
+}
+
 export interface RouteResponse {
   mode: RoutingMode;
   waypoints: RouteWaypoint[];
-  etaHours: number;
+  waypointsRaw?: RouteWaypoint[];
+  indexMap?: number[];
+  etaHours?: number;
   diagnostics?: IsochroneDiagnostics;
+  isCoarseRoute?: boolean;
 }
 
 export interface IsochroneShipOptions {
@@ -82,6 +99,22 @@ export interface IsochroneOptions {
   mergeRadiusNm?: number;
   goalRadiusNm?: number;
   maxHours?: number;
+  simplifyToleranceNm?: number;
+  minLegNm?: number;
+  minHeadingDeg?: number;
+  bearingWindowDeg?: number;
+  beamWidth?: number;
+  minTimeStepMinutes?: number;
+  maxTimeStepMinutes?: number;
+  complexityThreshold?: number;
+  enableAdaptiveSampling?: boolean;
+  
+  // Hierarchical Routing
+  enableHierarchicalRouting?: boolean;
+  longRouteThresholdNm?: number;
+  coarseGridResolutionDeg?: number;
+  corridorWidthNm?: number;
+
   ship?: IsochroneShipOptions;
   safetyCaps?: IsochroneSafetyCaps;
 }
@@ -118,6 +151,17 @@ export interface MaskData {
   land: boolean;
   shallow: boolean;
   restricted: boolean;
+}
+
+export interface RouteComparisonResult {
+  isochroneDistanceNm: number;
+  straightDistanceNm: number;
+  distanceDifferenceNm: number;
+  distanceDifferencePercent: number;
+  isochroneEtaHours: number;
+  straightEtaHours: number;
+  timeDifferenceHours: number;
+  timeDifferencePercent: number;
 }
 
 class RouterService {
@@ -173,12 +217,39 @@ class RouterService {
 
   private async loadLandMask(): Promise<void> {
     try {
+      console.log('Starting land mask load...');
       const response = await fetch('/land_mask.bin');
+      console.log('Land mask fetch response:', response.status, response.statusText);
       if (response.ok) {
         const buffer = await response.arrayBuffer();
+        console.log('Land mask buffer size:', buffer.byteLength);
         this.logMaskHeader(buffer);
         const bytes = new Uint8Array(buffer);
-        this.router.loadLandMask(bytes);
+        console.log('Calling router.loadLandMask with', bytes.length, 'bytes');
+        
+        // For large arrays, we need to process in chunks to avoid Emscripten binding limits
+        const CHUNK_SIZE = 1000000; // 1MB chunks
+        const chunks = [];
+        
+        for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+          const chunk = Array.from(bytes.slice(i, i + CHUNK_SIZE));
+          chunks.push(chunk);
+        }
+        
+        console.log(`Split into ${chunks.length} chunks of max ${CHUNK_SIZE} bytes each`);
+        
+        // Use the correct vector type we found
+        console.log('Creating vector with full land mask data...');
+        const vector = new this.module['vector$uint8_t$']();
+        
+        // Add ALL data to the vector (not just 1000 bytes)
+        for (let i = 0; i < bytes.length; i++) {
+          vector.push_back(bytes[i]);
+        }
+        
+        console.log('Vector created with', vector.size(), 'elements');
+        this.router.loadLandMask(vector);
+        console.log('Land mask loaded successfully');
       } else {
         console.warn('Land mask fetch failed with status', response.status);
       }
@@ -226,47 +297,63 @@ class RouterService {
     ]);
   }
 
-  solveRoute(
-    startI: number,
-    startJ: number,
-    goalI: number,
-    goalJ: number,
-    startTime: number = 0,
-    options: SolveRouteOptions = {}
-  ): RouteResponse {
+  public async solveRoute(
+    startLatGrid: number,
+    startLonGrid: number,
+    goalLatGrid: number,
+    goalLonGrid: number,
+    startTimeHours: number,
+    options: SolveRouteOptions = {},
+  ): Promise<RouteResponse> {
     this.ensureInitialized();
+    if (!this.module || !this.router || !this.environmentSampler) {
+      throw new Error('Router not initialized or environment sampler not set.');
+    }
 
-    const mode: RoutingMode = options.mode ?? 'ASTAR';
+    const { mode = 'ISOCHRONE', isochrone, start, goal } = options;
 
     if (mode === 'ISOCHRONE') {
-      const startPosition = options.start ?? this.gridToLatLon(startI, startJ);
-      const goalPosition = options.goal ?? this.gridToLatLon(goalI, goalJ);
-      const iso = options.isochrone ?? {};
-      const ship = iso.ship ?? {};
-      const safetyCaps = iso.safetyCaps ?? {};
+      const isoOpts = { ...DEFAULT_ISOCHRONE_OPTIONS, ...isochrone };
+      console.log('RouterService - Effective Isochrone Options:', isoOpts);
+
+      const startPosition = start ?? this.gridToLatLon(startLatGrid, startLonGrid);
+      const goalPosition = goal ?? this.gridToLatLon(goalLatGrid, goalLonGrid);
 
       const request: Record<string, unknown> = {
         start: startPosition,
         destination: goalPosition,
-        departTimeHours: startTime,
-        timeStepMinutes: iso.timeStepMinutes,
-        headingCount: iso.headingCount,
-        mergeRadiusNm: iso.mergeRadiusNm,
-        goalRadiusNm: iso.goalRadiusNm,
-        maxHours: iso.maxHours,
+        departTimeHours: startTimeHours,
+        timeStepMinutes: isoOpts.timeStepMinutes,
+        headingCount: isoOpts.headingCount,
+        mergeRadiusNm: isoOpts.mergeRadiusNm,
+        goalRadiusNm: isoOpts.goalRadiusNm,
+        maxHours: isoOpts.maxHours,
+        simplifyToleranceNm: isoOpts.simplifyToleranceNm,
+        minLegNm: isoOpts.minLegNm,
+        minHeadingDeg: isoOpts.minHeadingDeg,
+        bearingWindowDeg: isoOpts.bearingWindowDeg,
+        beamWidth: isoOpts.beamWidth,
+        minTimeStepMinutes: isoOpts.minTimeStepMinutes,
+        maxTimeStepMinutes: isoOpts.maxTimeStepMinutes,
+        complexityThreshold: isoOpts.complexityThreshold,
+        enableAdaptiveSampling: isoOpts.enableAdaptiveSampling,
+        enableHierarchicalRouting: isoOpts.enableHierarchicalRouting,
+        longRouteThresholdNm: isoOpts.longRouteThresholdNm,
+        coarseGridResolutionDeg: isoOpts.coarseGridResolutionDeg,
+        corridorWidthNm: isoOpts.corridorWidthNm,
         ship: {
-          calmSpeedKts: ship.calmSpeedKts,
-          draft: ship.draft,
-          safetyDepthBuffer: ship.safetyDepthBuffer,
-          maxWaveHeight: ship.maxWaveHeight ?? safetyCaps.maxWaveHeight,
-          maxHeadingChange: ship.maxHeadingChange ?? safetyCaps.maxHeadingChange,
-          minSpeed: ship.minSpeed,
-          waveDragCoefficient: ship.waveDragCoefficient,
+          calmSpeedKts: (isoOpts.ship as IsochroneShipOptions)?.calmSpeedKts ?? 14,
+          draft: (isoOpts.ship as IsochroneShipOptions)?.draft ?? 5.0,
+          safetyDepthBuffer: (isoOpts.ship as IsochroneShipOptions)?.safetyDepthBuffer ?? 10.0,
+          maxWaveHeight: (isoOpts.ship as IsochroneShipOptions)?.maxWaveHeight ?? isoOpts.safetyCaps?.maxWaveHeight ?? 8.0,
+          maxHeadingChange: (isoOpts.ship as IsochroneShipOptions)?.maxHeadingChange ?? isoOpts.safetyCaps?.maxHeadingChange ?? 30.0,
+          minSpeed: (isoOpts.ship as IsochroneShipOptions)?.minSpeed ?? 3.0,
+          waveDragCoefficient: (isoOpts.ship as IsochroneShipOptions)?.waveDragCoefficient ?? 0.1,
         },
         safetyCaps: {
-          maxWaveHeight: safetyCaps.maxWaveHeight ?? ship.maxWaveHeight,
-          maxHeadingChange: safetyCaps.maxHeadingChange ?? ship.maxHeadingChange,
-          minWaterDepth: safetyCaps.minWaterDepth,
+          maxWaveHeight: isoOpts.safetyCaps?.maxWaveHeight ?? isoOpts.ship?.maxWaveHeight,
+          maxHeadingChange: isoOpts.safetyCaps?.maxHeadingChange ?? isoOpts.ship?.maxHeadingChange,
+          minWaterDepth: isoOpts.safetyCaps?.minWaterDepth,
         },
       };
 
@@ -281,6 +368,14 @@ class RouterService {
         time: wp.time,
       }));
 
+      const waypointsRaw: RouteWaypoint[] = (response.waypointsRaw ?? []).map((wp: any) => ({
+        lat: wp.lat,
+        lon: wp.lon,
+        time: wp.time,
+      }));
+
+      const indexMap: number[] = response.indexMap ?? [];
+
       const diagnostics: IsochroneDiagnostics | undefined = response.diagnostics
         ? {
             totalDistanceNm: response.diagnostics.totalDistanceNm ?? 0,
@@ -290,32 +385,38 @@ class RouterService {
             frontierCount: response.diagnostics.frontierCount ?? 0,
             reachedGoal: Boolean(response.diagnostics.reachedGoal),
             finalDistanceToGoalNm: response.diagnostics.finalDistanceToGoalNm ?? 0,
-            etaHours: response.diagnostics.etaHours ?? response.eta ?? startTime,
+            etaHours: response.diagnostics.etaHours ?? response.eta ?? startTimeHours,
             hazardFlags: response.diagnostics.hazardFlags ?? 0,
           }
         : undefined;
 
-      const etaHours: number = response.eta ?? diagnostics?.etaHours ?? startTime;
+      const etaHours: number = response.eta ?? diagnostics?.etaHours ?? startTimeHours;
 
       if (waypoints.length === 0) {
         throw new Error('ISOCHRONE_NO_ROUTE');
       }
 
-      return {
-        mode: 'ISOCHRONE',
-        waypoints,
-        etaHours,
-        diagnostics,
+      const routeResult: RouteResponse = {
+        mode: 'ISOCHRONE' as RoutingMode,
+        waypoints: waypoints,
+        waypointsRaw: waypointsRaw,
+        indexMap: indexMap,
+        etaHours: etaHours,
+        diagnostics: diagnostics,
+        isCoarseRoute: response.isCoarseRoute,
       };
+
+      console.log('Full Route Response:', routeResult);
+      return routeResult;
     }
 
-    const routeNodes: RouteNode[] = this.router.solve(startI, startJ, goalI, goalJ, startTime);
+    const routeNodes: RouteNode[] = this.router.solve(startLatGrid, startLonGrid, goalLatGrid, goalLonGrid, startTimeHours);
     const waypoints: RouteWaypoint[] = routeNodes.map((node) => {
       const latLon = this.gridToLatLon(node.i, node.j);
       return { ...latLon, time: node.t };
     });
 
-    const etaHours = routeNodes.length > 0 ? routeNodes[routeNodes.length - 1].t : startTime;
+    const etaHours = routeNodes.length > 0 ? routeNodes[routeNodes.length - 1].t : startTimeHours;
 
     const totalDistanceNm = this.calculateRouteDistance(routeNodes);
     const travelDuration = routeNodes.length > 0 ? routeNodes[routeNodes.length - 1].t - routeNodes[0].t : 0;
@@ -331,10 +432,57 @@ class RouterService {
     };
 
     return {
-      mode: 'ASTAR',
+      mode: 'ASTAR' as RoutingMode,
       waypoints,
       etaHours,
       diagnostics,
+    };
+  }
+
+  /**
+   * Compares an Isochrone route with a straight-line great-circle route
+   * between the same start and end points.
+   *
+   * @param isochroneRoute The result of an Isochrone route calculation.
+   * @returns An object containing comparison metrics (distances and times for both routes, and their differences).
+   */
+  public compareWithStraightRoute(isochroneRoute: RouteResponse): RouteComparisonResult {
+    if (!this.module || !this.router) {
+      throw new Error('Router not initialized');
+    }
+
+    const start = isochroneRoute.waypoints[0];
+    const end = isochroneRoute.waypoints[isochroneRoute.waypoints.length - 1];
+
+    if (!start || !end) {
+      throw new Error('Isochrone result does not contain valid start and end waypoints for comparison.');
+    }
+
+    // Calculate straight-line great-circle distance
+    const straightDistanceNm = this.greatCircleDistance(start.lat, start.lon, end.lat, end.lon);
+
+    // Estimate straight-line time (assuming constant calm speed from defaults)
+    const calmSpeedKts = DEFAULT_ISOCHRONE_OPTIONS.ship?.calmSpeedKts ?? 14;
+    const straightEtaHours = straightDistanceNm / calmSpeedKts;
+
+    const isochroneDistanceNm = isochroneRoute.diagnostics?.totalDistanceNm ?? 0;
+    const isochroneEtaHours = isochroneRoute.etaHours ?? 0;
+
+    const distanceDifferenceNm = isochroneDistanceNm - straightDistanceNm;
+    const distanceDifferencePercent = straightDistanceNm > 0 ? (distanceDifferenceNm / straightDistanceNm) * 100 : 0;
+
+    const timeDifferenceHours = isochroneEtaHours - straightEtaHours;
+    const timeDifferencePercent = straightEtaHours > 0 ? (timeDifferenceHours / straightEtaHours) * 100 : 0;
+
+    return {
+      isochroneDistanceNm,
+      straightDistanceNm,
+      distanceDifferenceNm,
+      distanceDifferencePercent,
+      isochroneEtaHours,
+      straightEtaHours,
+      timeDifferenceHours,
+      timeDifferencePercent,
     };
   }
 
@@ -435,6 +583,38 @@ class RouterService {
       }
     } catch (err) {
       console.warn('Failed to load default pack:', err);
+    }
+  }
+
+  async getLandMaskData(): Promise<LandMaskData | null> {
+    if (!this.router) {
+      console.error('Router not initialized');
+      return null;
+    }
+
+    try {
+      console.log('Calling router.getLandMaskData()...');
+      const landMaskData = this.router.getLandMaskData();
+      console.log('Raw land mask data from router:', landMaskData);
+      
+      const result = {
+        loaded: landMaskData.loaded,
+        lat0: landMaskData.lat0,
+        lat1: landMaskData.lat1,
+        lon0: landMaskData.lon0,
+        lon1: landMaskData.lon1,
+        d_lat: landMaskData.d_lat,
+        d_lon: landMaskData.d_lon,
+        rows: landMaskData.rows,
+        cols: landMaskData.cols,
+        cells: new Uint8Array(landMaskData.cells)
+      };
+      
+      console.log('Processed land mask data:', result);
+      return result;
+    } catch (error) {
+      console.error('Failed to get land mask data:', error);
+      return null;
     }
   }
 }
