@@ -66,7 +66,14 @@ jobs:
     # or others). This is typically only required for manual builds.
     # - name: Setup runtime (example)
     #   uses: actions/setup-example@v1
-
+    - name: Custom Build for C++
+      if: ${{ matrix.language == 'cpp' }}
+      run: |
+        source ./emsdk/emsdk_env.sh
+        mkdir -p packages/router-core/build
+        emcmake cmake -S packages/router-core/src -B packages/router-core/build
+        cmake --build packages/router-core/build
+      working-directory: ${{ github.workspace }}
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
@@ -76,14 +83,7 @@ jobs:
         # If you wish to specify custom queries, you can do so here or in a config file.
         # By default, queries listed here will override any specified in a config file.
         # Prefix the list here with "+" to use these queries and those in the config file.
-    - name: Custom Build for C++
-      if: ${{ matrix.language == 'cpp' }}
-      run: |
-        source ./emsdk/emsdk_env.sh
-        mkdir -p packages/router-core/build
-        emcmake cmake -S packages/router-core/src -B packages/router-core/build
-        cmake --build packages/router-core/build
-      working-directory: ${{ github.workspace }}
+   
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
 
