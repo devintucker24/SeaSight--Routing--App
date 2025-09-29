@@ -154,6 +154,9 @@ self.onmessage = async (event: MessageEvent) => {
     } else if (type === 'CROSSES_ANTI_MERIDIAN') {
       const result = routerInstance.crossesAntiMeridian(payload.lon1, payload.lon2);
       self.postMessage({ type: 'CROSSES_ANTI_MERIDIAN_RESULT', payload: result, id });
+    } else if (type === 'CREATE_EDGE') {
+      const result = routerInstance.createEdge(payload.fromI, payload.fromJ, payload.toI, payload.toJ);
+      self.postMessage({ type: 'CREATE_EDGE_RESULT', payload: result, id });
     }
   } catch (error: any) {
     self.postMessage({ type: 'ERROR', payload: error.message, id });

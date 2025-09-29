@@ -216,7 +216,8 @@ class RouterService {
         type === 'LATLON_TO_GRID_RESULT' ||
         type === 'GREAT_CIRCLE_DISTANCE_RESULT' ||
         type === 'NORMALIZE_LONGITUDE_RESULT' ||
-        type === 'CROSSES_ANTI_MERIDIAN_RESULT'
+        type === 'CROSSES_ANTI_MERIDIAN_RESULT' ||
+        type === 'CREATE_EDGE_RESULT'
       ) {
         promiseHandlers.resolve(payload);
       } else if (type === 'ROUTE_SOLVED') {
@@ -347,9 +348,9 @@ class RouterService {
     };
   }
 
-  createEdge(fromI: number, fromJ: number, toI: number, toJ: number): EdgeData {
+  async createEdge(fromI: number, fromJ: number, toI: number, toJ: number): Promise<EdgeData> {
     this.ensureInitialized();
-    return this.routerWorker.postMessage({ type: 'CREATE_EDGE', payload: { fromI, fromJ, toI, toJ } }) as Promise<EdgeData>;
+    return this.createWorkerPromise(this.routerWorker, 'CREATE_EDGE', { fromI, fromJ, toI, toJ });
   }
 
   async gridToLatLon(i: number, j: number): Promise<LatLonPosition> { return this.createWorkerPromise(this.routerWorker, 'GRID_TO_LATLON', { i, j }); }
