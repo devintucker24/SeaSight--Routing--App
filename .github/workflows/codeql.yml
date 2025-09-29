@@ -66,13 +66,22 @@ jobs:
     # or others). This is typically only required for manual builds.
     # - name: Setup runtime (example)
     #   uses: actions/setup-example@v1
-    - name: Trace Build with CodeQL
-      run: |
-        source ./emsdk/emsdk_env.sh
-        mkdir -p packages/router-core/build
-        emcmake cmake -S packages/router-core/src -B packages/router-core/build
-        codeql database trace-command -- cmake --build packages/router-core/build
-      working-directory: ${{ github.workspace }}
+   - name: Set up Emscripten SDK
+  run: |
+    git clone https://github.com/emscripten-core/emsdk.git
+    cd emsdk
+    ./emsdk install latest
+    ./emsdk activate latest
+    source ./emsdk_env.sh
+  shell: bash
+
+- name: Trace Build with CodeQL
+  run: |
+    source ./emsdk/emsdk_env.sh
+    mkdir -p packages/router-core/build
+    emcmake cmake -S packages/router-core/src -B packages/router-core/build
+    codeql database trace-command -- cmake --build packages/router-core/build
+  working-directory: ${{ github.workspace }}
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
