@@ -6,7 +6,6 @@ import type {
   LatLonPosition, 
   MapStyle, 
   RoutingMode, 
-  IsochroneOptions,
   MapLayer,
   RouteResponse 
 } from '../types';
@@ -16,7 +15,7 @@ import {
   generateRouteKey,
   createMapLayer 
 } from '../utils';
-import { DEFAULT_ISOCHRONE_OPTIONS, MAP_LAYERS } from '../constants';
+import { MAP_LAYERS } from '../constants';
 
 // ============================================================================
 // Main App State Hook

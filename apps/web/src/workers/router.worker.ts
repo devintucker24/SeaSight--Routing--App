@@ -2,7 +2,8 @@
 import SeaSightRouterModule from '@seasight/router-wasm';
 import type { RouteResponse, RouterConfig, SolveRouteOptions } from '../features/route-planner/services/RouterService';
 import type { IsochroneEnvironmentSample } from '@shared/types';
-import { PackData, EnvironmentSamplerOptions, createEnvironmentSampler } from './PackLoader';
+import { createEnvironmentSampler } from './PackLoader';
+import type { PackData, EnvironmentSamplerOptions } from './PackLoader';
 
 let routerModule: any = null;
 let routerInstance: any = null;

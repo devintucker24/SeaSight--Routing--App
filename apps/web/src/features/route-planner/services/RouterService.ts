@@ -1,5 +1,6 @@
 // Router Service for SeaSight Router WASM Integration
-import { loadPack, createEnvironmentSampler, PackData, EnvironmentSamplerOptions } from '../../../workers/PackLoader';
+// import { loadPack, createEnvironmentSampler } from '../../../workers/PackLoader';
+import type { PackData, EnvironmentSamplerOptions } from '../../../workers/PackLoader';
 import { DEFAULT_ISOCHRONE_OPTIONS } from '@shared/constants';
 import type { IsochroneEnvironmentSample, EnvironmentSampler } from '@shared/types';
 
@@ -72,7 +73,7 @@ export interface RouteResponse {
   waypoints: RouteWaypoint[];
   waypointsRaw?: RouteWaypoint[];
   indexMap?: number[];
-  etaHours?: number;
+  etaHours: number;
   diagnostics?: IsochroneDiagnostics;
   isCoarseRoute?: boolean;
 }
@@ -162,20 +163,21 @@ class RouterService {
   private packWorkerReady: boolean = false;
   private routerWorkerReady: boolean = false;
   private isInitialized = false;
-  private environmentSampler: EnvironmentSampler | null = null;
+  // private environmentSampler: EnvironmentSampler | null = null;
   private initializationPromise: Promise<void> | null = null;
 
   private workerMessageId = 0;
   private pendingWorkerPromises = new Map<number, { resolve: (value: any) => void, reject: (reason?: any) => void }>();
 
   constructor() {
-    this.packWorker = new Worker(new URL('../workers/pack.worker.ts', import.meta.url), { type: 'module' });
-    this.routerWorker = new Worker(new URL('../workers/router.worker.ts', import.meta.url), { type: 'module' });
+    this.packWorker = new Worker(new URL('../../../workers/pack.worker.ts', import.meta.url), { type: 'module' });
+    // this.routerWorker = new Worker(new URL('../../../workers/router.worker.ts', import.meta.url), { type: 'module' });
+    this.routerWorker = null as any; // Temporarily disabled
 
     this.packWorker.onmessage = (event) => this.handlePackWorkerMessage(event);
-    this.routerWorker.onmessage = (event) => this.handleRouterWorkerMessage(event);
+    // this.routerWorker.onmessage = (event) => this.handleRouterWorkerMessage(event);
     this.packWorker.onerror = (error) => console.error('Pack Worker error:', error);
-    this.routerWorker.onerror = (error) => console.error('Router Worker error:', error);
+    // this.routerWorker.onerror = (error) => console.error('Router Worker error:', error);
   }
 
   private getNextMessageId(): number {
@@ -186,7 +188,11 @@ class RouterService {
     const id = this.getNextMessageId();
     return new Promise((resolve, reject) => {
       this.pendingWorkerPromises.set(id, { resolve, reject });
-      worker.postMessage({ type, payload, id }, transferable);
+      if (transferable) {
+        worker.postMessage({ type, payload, id }, transferable);
+      } else {
+        worker.postMessage({ type, payload, id });
+      }
     });
   }
 
@@ -206,29 +212,29 @@ class RouterService {
     }
   }
 
-  private handleRouterWorkerMessage(event: MessageEvent): void {
-    const { type, payload, id } = event.data;
-    const promiseHandlers = this.pendingWorkerPromises.get(id);
-    if (promiseHandlers) {
-      this.pendingWorkerPromises.delete(id);
-      if (
-        type === 'GRID_TO_LATLON_RESULT' ||
-        type === 'LATLON_TO_GRID_RESULT' ||
-        type === 'GREAT_CIRCLE_DISTANCE_RESULT' ||
-        type === 'NORMALIZE_LONGITUDE_RESULT' ||
-        type === 'CROSSES_ANTI_MERIDIAN_RESULT' ||
-        type === 'CREATE_EDGE_RESULT'
-      ) {
-        promiseHandlers.resolve(payload);
-      } else if (type === 'ROUTE_SOLVED') {
-        promiseHandlers.resolve(payload);
-      } else if (type === 'ERROR') {
-        promiseHandlers.reject(new Error(payload));
-      } else {
-        console.warn('Unknown message type from router worker:', type);
-      }
-    }
-  }
+  // private handleRouterWorkerMessage(event: MessageEvent): void {
+  //   const { type, payload, id } = event.data;
+  //   const promiseHandlers = this.pendingWorkerPromises.get(id);
+  //   if (promiseHandlers) {
+  //     this.pendingWorkerPromises.delete(id);
+  //     if (
+  //       type === 'GRID_TO_LATLON_RESULT' ||
+  //       type === 'LATLON_TO_GRID_RESULT' ||
+  //       type === 'GREAT_CIRCLE_DISTANCE_RESULT' ||
+  //       type === 'NORMALIZE_LONGITUDE_RESULT' ||
+  //       type === 'CROSSES_ANTI_MERIDIAN_RESULT' ||
+  //       type === 'CREATE_EDGE_RESULT'
+  //     ) {
+  //       promiseHandlers.resolve(payload);
+  //     } else if (type === 'ROUTE_SOLVED') {
+  //       promiseHandlers.resolve(payload);
+  //     } else if (type === 'ERROR') {
+  //       promiseHandlers.reject(new Error(payload));
+  //     } else {
+  //       console.warn('Unknown message type from router worker:', type);
+  //     }
+  //   }
+  // }
 
   async initialize(config: RouterConfig): Promise<void> {
     if (this.isInitialized) {
@@ -308,7 +314,7 @@ class RouterService {
    * @param isochroneRoute The result of an Isochrone route calculation.
    * @returns An object containing comparison metrics (distances and times for both routes, and their differences).
    */
-  public compareWithStraightRoute(isochroneRoute: RouteResponse): RouteComparisonResult {
+  public async compareWithStraightRoute(isochroneRoute: RouteResponse): Promise<RouteComparisonResult> {
     if (!this.isInitialized) {
       throw new Error('Router not initialized');
     }
@@ -321,7 +327,7 @@ class RouterService {
     }
 
     // Calculate straight-line great-circle distance
-    const straightDistanceNm = this.greatCircleDistance(start.lat, start.lon, end.lat, end.lon);
+    const straightDistanceNm = await this.greatCircleDistance(start.lat, start.lon, end.lat, end.lon);
 
     // Estimate straight-line time (assuming constant calm speed from defaults)
     const calmSpeedKts = DEFAULT_ISOCHRONE_OPTIONS.ship?.calmSpeedKts ?? 14;
@@ -360,12 +366,12 @@ class RouterService {
   async crossesAntiMeridian(lon1: number, lon2: number): Promise<boolean> { return this.createWorkerPromise(this.routerWorker, 'CROSSES_ANTI_MERIDIAN', { lon1, lon2 }); }
 
   // Helper method to calculate total route distance
-  calculateRouteDistance(route: RouteNode[]): number { throw new Error('calculateRouteDistance not yet implemented for worker architecture.'); }
+  calculateRouteDistance(_route: RouteNode[]): number { throw new Error('calculateRouteDistance not yet implemented for worker architecture.'); }
 
   // Helper method to calculate total route time
-  calculateRouteTime(route: RouteNode[]): number { throw new Error('calculateRouteTime not yet implemented for worker architecture.'); }
+  calculateRouteTime(_route: RouteNode[]): number { throw new Error('calculateRouteTime not yet implemented for worker architecture.'); }
 
-  sampleEnvironment(lat: number, lon: number, timeHours = 0): Promise<IsochroneEnvironmentSample | null> { throw new Error('sampleEnvironment is now internal to the router.worker.'); }
+  sampleEnvironment(_lat: number, _lon: number, _timeHours = 0): Promise<IsochroneEnvironmentSample | null> { throw new Error('sampleEnvironment is now internal to the router.worker.'); }
 
   async getLandMaskData(): Promise<LandMaskData | null> {
     // This method will now need to communicate with the router worker if land mask data is needed from WASM.

@@ -64,8 +64,8 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      # Set up Emscripten and trace the build for C++ analysis
-      - name: Set up Emscripten SDK and Trace Build
+      # Set up Emscripten for C++ analysis
+      - name: Set up Emscripten SDK
         if: matrix.language == 'c-cpp'
         shell: bash
         run: |
@@ -76,6 +76,14 @@ jobs:
           source ./emsdk_env.sh
           # Create build directory
           mkdir -p packages/router-core/build
+        working-directory: ${{ github.workspace }}
+
+      # Configure and build C++ with CodeQL tracing
+      - name: Configure and Build C++ with CodeQL Tracing
+        if: matrix.language == 'c-cpp'
+        shell: bash
+        run: |
+          source emsdk/emsdk_env.sh
           # Configure Emscripten build and wrap it with CodeQL tracing
           codeql database trace-command -- \
             emcmake cmake -S packages/router-core/src -B packages/router-core/build

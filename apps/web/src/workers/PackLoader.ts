@@ -99,7 +99,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
     try {
       const array = await loadFloat32Array(filename, timeScalars)
       fieldData[fieldName] = array
-      buffers[fieldName] = array.buffer
+      buffers[fieldName] = array.buffer as SharedArrayBuffer
     } catch (err) {
       console.warn(`Unable to load field ${fieldName} from ${filename}:`, err)
     }
@@ -111,7 +111,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
         const filename = `${basePath}/${fieldName}.bin`
         try {
           masks[fieldName] = await loadUint8Array(filename, totalScalars)
-          buffers[fieldName] = masks[fieldName].buffer
+          buffers[fieldName] = masks[fieldName].buffer as SharedArrayBuffer
         } catch (err) {
           console.warn(`Unable to load mask ${fieldName} from ${filename}:`, err)
         }
@@ -128,7 +128,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
       const filename = `${basePath}/${maskFile.replace('.bin.zst', '.bin')}`
       try {
         masks[logicalName] = await loadUint8Array(filename, totalScalars)
-        buffers[logicalName] = masks[logicalName].buffer
+        buffers[logicalName] = masks[logicalName].buffer as SharedArrayBuffer
       } catch (err) {
         console.warn(`Unable to load mask ${logicalName} from ${filename}:`, err)
       }
@@ -192,67 +192,67 @@ function sampleMask(array: Uint8Array | undefined, rows: number, cols: number, r
 
 export function createEnvironmentSampler(pack: PackData, options: EnvironmentSamplerOptions = {}): (lat: number, lon: number, timeHours: number) => IsochroneEnvironmentSample {
  const {
-    lat0, lon0, d, rows, cols, timeCount
+    lat0, lon0, d, rows, cols
   } = pack.grid
 
-  const softenMaskEdges = (mask: Uint8Array | undefined): Uint8Array | undefined => {
-    if (!mask || mask.length === 0) return undefined
+  // const softenMaskEdges = (mask: Uint8Array | undefined): Uint8Array | undefined => {
+  //   if (!mask || mask.length === 0) return undefined
 
-    const rowAllSame = (row: number): number => {
-      const base = row * cols
-      const first = mask[base]
-      for (let c = 1; c < cols; c++) {
-        if (mask[base + c] !== first) return first
-      }
-      return first
-    }
+  //   const rowAllSame = (row: number): number => {
+  //     const base = row * cols
+  //     const first = mask[base]
+  //     for (let c = 1; c < cols; c++) {
+  //       if (mask[base + c] !== first) return first
+  //     }
+  //     return first
+  //   }
 
-    const zeroRow = (row: number) => {
-      const base = row * cols
-      mask.fill(0, base, base + cols)
-    }
+  //   const zeroRow = (row: number) => {
+  //     const base = row * cols
+  //     mask.fill(0, base, base + cols)
+  //   }
 
-    let top = 0
-    while (top < rows && rowAllSame(top) === 1) {
-      zeroRow(top)
-      top++
-    }
+  //   let top = 0
+  //   while (top < rows && rowAllSame(top) === 1) {
+  //     zeroRow(top)
+  //     top++
+  //   }
 
-    let bottom = rows - 1
-    while (bottom >= 0 && rowAllSame(bottom) === 1) {
-      zeroRow(bottom)
-      bottom--
-    }
+  //   let bottom = rows - 1
+  //   while (bottom >= 0 && rowAllSame(bottom) === 1) {
+  //     zeroRow(bottom)
+  //     bottom--
+  //   }
 
-    const colAllSame = (col: number): number => {
-      const first = mask[col]
-      for (let r = 1; r < rows; r++) {
-        if (mask[r * cols + col] !== first) return first
-      }
-      return first
-    }
+  //   const colAllSame = (col: number): number => {
+  //     const first = mask[col]
+  //     for (let r = 1; r < rows; r++) {
+  //       if (mask[r * cols + col] !== first) return first
+  //     }
+  //     return first
+  //   }
 
-    const zeroCol = (col: number) => {
-      for (let r = 0; r < rows; r++) {
-        mask[r * cols + col] = 0
-      }
-    }
+  //   const zeroCol = (col: number) => {
+  //     for (let r = 0; r < rows; r++) {
+  //       mask[r * cols + col] = 0
+  //     }
+  //   }
 
-    let left = 0
-    while (left < cols && colAllSame(left) === 1) {
-      zeroCol(left)
-      left++
-    }
+  //   let left = 0
+  //   while (left < cols && colAllSame(left) === 1) {
+  //     zeroCol(left)
+  //     left++
+  //   }
 
-    let right = cols - 1
-    while (right >= 0 && colAllSame(right) === 1) {
-      zeroCol(right)
-      right--
-    }
+  //   let right = cols - 1
+  //   while (right >= 0 && colAllSame(right) === 1) {
+  //     zeroCol(right)
+  //     right--
+  //   }
 
-    const unique = new Set(mask)
-    return unique.size === 1 ? undefined : mask
-  }
+  //   const unique = new Set(mask)
+  //   return unique.size === 1 ? undefined : mask
+  // }
 
   const maskLand = undefined
   const maskShallow = undefined

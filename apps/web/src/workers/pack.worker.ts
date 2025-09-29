@@ -1,5 +1,6 @@
 
-import { loadPack, createEnvironmentSampler, PackData, EnvironmentSamplerOptions } from './PackLoader';
+import { loadPack, createEnvironmentSampler } from './PackLoader';
+import type { PackData } from './PackLoader';
 import type { IsochroneEnvironmentSample } from '@shared/types';
 
 let currentPack: PackData | null = null;

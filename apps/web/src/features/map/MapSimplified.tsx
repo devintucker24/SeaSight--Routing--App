@@ -324,7 +324,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
     console.log(`Created ${landPolygons.length} land polygons`);
 
     const geojsonData = {
-      type: 'FeatureCollection',
+      type: 'FeatureCollection' as const,
       features: landPolygons
     };
 
