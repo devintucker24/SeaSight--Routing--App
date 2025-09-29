@@ -1,4 +1,4 @@
-import type { IsochroneEnvironmentSample } from './RouterService'
+import type { IsochroneEnvironmentSample } from '@shared/types'
 
 export interface PackGridInfo {
   lat0: number
@@ -14,8 +14,10 @@ export interface PackGridInfo {
 export interface PackData {
   grid: PackGridInfo
   times: string[]
-  fields: Record<string, Float32Array>
-  masks: Record<string, Uint8Array>
+  fields: Record<string, Float32Array> // These will be views over SharedArrayBuffer
+  masks: Record<string, Uint8Array> // These will be views over SharedArrayBuffer
+  // The underlying SharedArrayBuffers that back the views in 'fields' and 'masks'
+  buffers: Record<string, SharedArrayBuffer>
 }
 
 export interface EnvironmentSamplerOptions {
@@ -40,12 +42,15 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   if (!res.ok) {
     throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`)
   }
-  return await res.arrayBuffer()
+  const buffer = await res.arrayBuffer()
+  const sab = new SharedArrayBuffer(buffer.byteLength)
+  new Uint8Array(sab).set(new Uint8Array(buffer))
+  return sab
 }
 
 async function loadFloat32Array(url: string, expectedLength: number): Promise<Float32Array> {
   const buffer = await fetchArrayBuffer(url)
-  const array = new Float32Array(buffer)
+  const array = new Float32Array(buffer) // This will now be a view over SharedArrayBuffer
   if (expectedLength > 0 && array.length !== expectedLength) {
     console.warn(`Float32 array length mismatch for ${url}: expected ${expectedLength}, got ${array.length}`)
   }
@@ -54,7 +59,7 @@ async function loadFloat32Array(url: string, expectedLength: number): Promise<Fl
 
 async function loadUint8Array(url: string, expectedLength: number): Promise<Uint8Array> {
   const buffer = await fetchArrayBuffer(url)
-  const array = new Uint8Array(buffer)
+  const array = new Uint8Array(buffer) // This will now be a view over SharedArrayBuffer
   if (expectedLength > 0 && array.length !== expectedLength) {
     console.warn(`Uint8 array length mismatch for ${url}: expected ${expectedLength}, got ${array.length}`)
   }
@@ -84,6 +89,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
 
   const fieldData: Record<string, Float32Array> = {}
   const masks: Record<string, Uint8Array> = {}
+  const buffers: Record<string, SharedArrayBuffer> = {}
 
   const totalScalars = rows * cols
   const timeScalars = timeCount * totalScalars
@@ -93,6 +99,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
     try {
       const array = await loadFloat32Array(filename, timeScalars)
       fieldData[fieldName] = array
+      buffers[fieldName] = array.buffer
     } catch (err) {
       console.warn(`Unable to load field ${fieldName} from ${filename}:`, err)
     }
@@ -104,6 +111,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
         const filename = `${basePath}/${fieldName}.bin`
         try {
           masks[fieldName] = await loadUint8Array(filename, totalScalars)
+          buffers[fieldName] = masks[fieldName].buffer
         } catch (err) {
           console.warn(`Unable to load mask ${fieldName} from ${filename}:`, err)
         }
@@ -120,6 +128,7 @@ export async function loadPack(basePath: string): Promise<PackData> {
       const filename = `${basePath}/${maskFile.replace('.bin.zst', '.bin')}`
       try {
         masks[logicalName] = await loadUint8Array(filename, totalScalars)
+        buffers[logicalName] = masks[logicalName].buffer
       } catch (err) {
         console.warn(`Unable to load mask ${logicalName} from ${filename}:`, err)
       }
@@ -130,7 +139,8 @@ export async function loadPack(basePath: string): Promise<PackData> {
     grid,
     times,
     fields: fieldData,
-    masks
+    masks,
+    buffers
   }
 }
 

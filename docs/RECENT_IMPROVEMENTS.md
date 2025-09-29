@@ -213,6 +213,22 @@ src/features/
 - **Memory tracking** for resource management
 - **Route calculation** performance tracking
 
+## ✨ Recent Feature Completions
+
+### Off-Main-Thread Solver & PackLoader Worker
+- **Completed**: Moved WASM-based route solving and data pack loading into separate Web Workers.
+- **Architecture**:
+  - `pack.worker.ts`: Handles fetching, caching, and sampling of environmental data packs.
+  - `router.worker.ts`: Manages the C++/WASM routing engine, rebuilt with Pthread support for multi-threading.
+  - `SharedArrayBuffer`: Used for zero-copy data sharing of large environmental data between workers, eliminating transfer overhead.
+- **Performance Impact**:
+  - The main UI thread is no longer blocked during route computations, ensuring the app remains responsive.
+  - Data loading and processing are also off the main thread, improving initial load and data management performance.
+- **Technical Details**:
+  - Enabled Emscripten's Pthread support by recompiling the C++ core with `-pthread` flags.
+  - Configured Vite with `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers to enable `SharedArrayBuffer`.
+  - Refactored `RouterService.ts` to act as an orchestrator for the workers.
+
 ## 🔮 Future Enhancements
 
 ### Planned Improvements

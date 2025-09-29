@@ -29,9 +29,9 @@ Legend: [P1]=top priority, [P2]=next, [P3]=later; [🟢 Completed] already lande
 ### Phase 2: Responsiveness and User Experience (P2)
 *Goal: Ensure the UI remains responsive during solves and provides better feedback.*
 
-5) **[P2] Off-Main-Thread Solver**
+5) **[P2] Off-Main-Thread Solver** ✅ **COMPLETED**
    - Move the WASM routing call into a Web Worker to prevent the UI from freezing during long computations.
-   - *Files*: `useRouter.ts`, Emscripten thread configuration
+   - *Files*: `useRouter.ts`, `RouterService.ts`, `router.worker.ts`, `pack.worker.ts`, Emscripten Pthread configuration
 
 6) **[P2] Early-Exit Budget & Partial Routes**
    - Implement a time budget (e.g., 60 seconds). If the solver exceeds it, it terminates and returns the best partial route found so far.

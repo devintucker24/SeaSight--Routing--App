@@ -39,6 +39,7 @@ public:
         double max_time_step_minutes = 120.0;  // Maximum time step for adaptive sampling
         double complexity_threshold = 0.5;  // Threshold for environmental complexity (0-1)
         bool enable_adaptive_sampling = true;  // Enable/disable adaptive time step adjustment
+        double time_budget_seconds = 60.0;  // Maximum time to spend solving (0 = unlimited)
 
         // Hierarchical Routing Parameters
         bool enable_hierarchical_routing = true; // Master switch for this feature

@@ -273,67 +273,77 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
   // Create land mask layer once data is available
   useEffect(() => {
     const map = mapInstance.current;
-    if (!map || !isMapReady || !landMaskData || !landMaskData.loaded || map.getSource('land-mask-image-source')) {
+    if (!map || !isMapReady || !landMaskData || !landMaskData.loaded || map.getSource('land-mask-geojson-source')) {
       return;
     }
     
     console.log('Setting up land mask layer for the first time.');
 
-    const { lat0, lon0, lat1, lon1, rows, cols, cells } = landMaskData;
+    const { lat0, lon0, d_lat, d_lon, rows, cols, cells } = landMaskData;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = cols;
-    canvas.height = rows;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const imageData = ctx.createImageData(cols, rows);
-    const data = imageData.data;
-
-    // Fill the ImageData with the land mask data, flipping the rows vertically
-    // The source `cells` data is ordered from South to North (bottom-to-top),
-    // but canvas ImageData is drawn from top-to-bottom.
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        // Source index from bottom-to-top
+    // Create GeoJSON polygons for land cells
+    const landPolygons: any[] = [];
+    
+    // Sample every 2nd cell to reduce polygon count for performance
+    const step = 2;
+    for (let y = 0; y < rows; y += step) {
+      for (let x = 0; x < cols; x += step) {
         const srcIndex = y * cols + x;
-        // Destination index from top-to-bottom
-        const destRow = rows - 1 - y;
-        const destIndex = (destRow * cols + x) * 4;
-        
         const isLand = cells[srcIndex] !== 0;
+        
         if (isLand) {
-          data[destIndex] = 255;     // R
-          data[destIndex + 1] = 107; // G
-          data[destIndex + 2] = 107; // B
-          data[destIndex + 3] = 77;  // Alpha (0.3 * 255)
+          // Calculate cell bounds
+          const cellLat = lat0 + y * d_lat;
+          const cellLon = lon0 + x * d_lon;
+          const nextLat = cellLat + d_lat;
+          const nextLon = cellLon + d_lon;
+          
+          // Create a rectangle polygon for this land cell
+          const polygon = {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [cellLon, cellLat],     // Bottom-left
+                [nextLon, cellLat],     // Bottom-right
+                [nextLon, nextLat],     // Top-right
+                [cellLon, nextLat],     // Top-left
+                [cellLon, cellLat]      // Close polygon
+              ]]
+            },
+            properties: {
+              isLand: true
+            }
+          };
+          
+          landPolygons.push(polygon);
         }
       }
     }
-    ctx.putImageData(imageData, 0, 0);
 
-    const imageUrl = canvas.toDataURL();
-    const coordinates: [[number, number], [number, number], [number, number], [number, number]] = [
-      [lon0, lat1], // Top-left
-      [lon1, lat1], // Top-right
-      [lon1, lat0], // Bottom-right
-      [lon0, lat0]  // Bottom-left
-    ];
+    console.log(`Created ${landPolygons.length} land polygons`);
 
-    if (!map.getSource('land-mask-image-source')) {
-      map.addSource('land-mask-image-source', {
-        type: 'image',
-        url: imageUrl,
-        coordinates: coordinates
+    const geojsonData = {
+      type: 'FeatureCollection',
+      features: landPolygons
+    };
+
+    if (!map.getSource('land-mask-geojson-source')) {
+      map.addSource('land-mask-geojson-source', {
+        type: 'geojson',
+        data: geojsonData
       });
     }
     
-    if (!map.getLayer('land-mask-image-layer')) {
+    if (!map.getLayer('land-mask-geojson-layer')) {
       map.addLayer({
-        id: 'land-mask-image-layer',
-        type: 'raster',
-        source: 'land-mask-image-source',
-        paint: { 'raster-opacity': 0.8 },
+        id: 'land-mask-geojson-layer',
+        type: 'fill',
+        source: 'land-mask-geojson-source',
+        paint: {
+          'fill-color': '#6b6b6b',
+          'fill-opacity': 0.3
+        },
         layout: { 'visibility': 'none' } // Initially hidden
       });
     }
@@ -342,9 +352,9 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
   // Toggle land mask visibility
   useEffect(() => {
     const map = mapInstance.current;
-    if (isMapReady && map?.getLayer('land-mask-image-layer')) {
+    if (isMapReady && map?.getLayer('land-mask-geojson-layer')) {
       map.setLayoutProperty(
-        'land-mask-image-layer',
+        'land-mask-geojson-layer',
         'visibility',
         showLandMask ? 'visible' : 'none'
       );

@@ -16,3 +16,11 @@ declare module '../wasm/SeaSightRouter.js' {
   const SeaSightRouterModule: any;
   export default SeaSightRouterModule;
 }
+
+declare module '*.worker.ts' {
+  class WebWorker extends Worker {
+    constructor();
+  }
+
+  export default WebWorker;
+}
