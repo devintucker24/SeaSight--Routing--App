@@ -31,7 +31,8 @@ Legend: [P1]=top priority, [P2]=next, [P3]=later; [🟢 Completed] already lande
 
 5) **[P2] Off-Main-Thread Solver** ✅ **COMPLETED**
    - Move the WASM routing call into a Web Worker to prevent the UI from freezing during long computations.
-   - *Files*: `useRouter.ts`, `RouterService.ts`, `router.worker.ts`, `pack.worker.ts`, Emscripten Pthread configuration
+   - *Files*: `useRouter.ts`, `RouterService.ts`, `router.worker.ts`, `pack.worker.ts`
+   - *Note*: Single-threaded WASM build (pthread removed for web worker compatibility)
 
 6) **[P2] Early-Exit Budget & Partial Routes**
    - Implement a time budget (e.g., 60 seconds). If the solver exceeds it, it terminates and returns the best partial route found so far.
@@ -58,7 +59,70 @@ Legend: [P1]=top priority, [P2]=next, [P3]=later; [🟢 Completed] already lande
     - *Files*: `apps/web/src/features/map/MapSimplified.tsx`
 
 ---
+### Phase 4: Threading & ML Preparation (P3 - Future)
+*Goal: Prepare architecture for ML batch processing without breaking current functionality.*
+
+11) **[P3] Worker Pool Architecture for ML**
+   - Implement a worker pool manager to handle parallel route calculations for ML model training.
+   - Use multiple single-threaded WASM workers instead of pthread for better compatibility and isolation.
+   - *Files*: `apps/web/src/workers/WorkerPool.ts`, `RouterService.ts`
+   - *Benefit*: 8x parallelism on 8-core machines without pthread complexity
+   - *Status*: Planned for v0.5.0 ML integration
+
+12) **[P3] Hybrid Build System (Single + Multi-threaded)**
+   - Create two build variants: single-threaded (current) and multi-threaded (future ML).
+   - Single-threaded for web workers, multi-threaded for main thread batch processing.
+   - *Files*: `packages/router-core/src/CMakeLists.txt`, `package.json`
+   - *Benefit*: Best of both worlds - compatibility now, performance later
+   - *Status*: Optional, only if worker pool insufficient
+
+13) **[P3] ML Batch API**
+   - Design API for processing 1000+ route scenarios in parallel for ML training.
+   - Support both worker pool and pthread pool backends.
+   - *Files*: `RouterService.ts`, `MLCoordinator.ts`
+   - *Benefit*: Ready for ONNX integration in v0.5.0
+
+---
+### Architecture Decisions
+
+**Threading Strategy:**
+- **Current (v0.3.0-v0.4.0):** Single-threaded WASM in web workers ✅
+  - ✅ Universal browser compatibility
+  - ✅ Works reliably in worker context
+  - ✅ No SharedArrayBuffer issues
+  - ✅ Simple debugging and maintenance
+  - ✅ Fast enough for single routes (< 1 second)
+
+- **Future (v0.5.0+):** Worker pool for ML parallelism
+  - Multiple single-threaded WASM instances
+  - 4-8x parallelism without pthread complexity
+  - Better isolation (crash resilience)
+  - Each worker processes routes independently
+  - Optional pthread build for extreme performance needs
+
+**Why Not Pthreads Initially:**
+- ❌ Pthreads don't work reliably in web worker context
+- ❌ SharedArrayBuffer restrictions in workers
+- ❌ Worker-in-worker spawn limitations
+- ❌ Adds complexity without current benefit
+- ✅ Single routes are already fast enough (< 1 second)
+- ✅ Worker pool provides sufficient parallelism for ML
+
+**When to Consider Pthreads:**
+- Only if ML profiling shows worker pool insufficient
+- Main thread context only (not in workers)
+- Separate build variant, not default
+- Requires performance benchmarking first
+
+**Build Configuration:**
+- `CMakeLists.txt` uses single-threaded flags
+- Removed: `-pthread`, `-s USE_PTHREADS=1`, `-s PTHREAD_POOL_SIZE=4`
+- Result: WASM loads instantly in workers without "loading-workers" dependency
+
+---
 ### Previously Completed Tasks
 - [🟢] Waypoint/solve guards
 - [🟢] Post-process route to remove zig-zags (Douglas-Peucker)
 - [🟢] Dense safety sampling along legs
+- [🟢] Pthread removal for web worker compatibility
+- [🟢] Worker message type fixes (ROUTER_INITIALIZED)

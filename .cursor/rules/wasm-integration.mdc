@@ -1,0 +1,407 @@
+
+# WebAssembly Integration Patterns
+
+## 🏗️ C++ to WASM Architecture
+
+### Router Core Structure
+The router is implemented in C++17 and compiled to WebAssembly via Emscripten:
+
+```
+packages/router-core/src/
+├── main.cpp              # Emscripten bindings and wrapper
+├── isochrone_router.cpp  # Time-dependent A* algorithm
+├── isochrone_router.hpp  # Router interface definitions
+└── CMakeLists.txt        # Build configuration
+```
+
+### Emscripten Bindings Pattern
+```cpp
+// ✅ Use emscripten::val for JavaScript interop
+#include <emscripten/bind.h>
+#include <emscripten/val.h>
+
+// ✅ Wrap C++ classes for JavaScript access
+class RouterWrapper {
+public:
+    RouterWrapper(double lat0, double lat1, double lon0, double lon1, double d_lat, double d_lon);
+    
+    // ✅ Use emscripten::val for complex data structures
+    emscripten::val solve(int start_i, int start_j, int goal_i, int goal_j, double start_time = 0.0);
+    emscripten::val solveIsochrone(const emscripten::val& request, const emscripten::val& sampler);
+    
+    // ✅ Expose utility functions
+    emscripten::val gridToLatLon(int i, int j);
+    emscripten::val latLonToGrid(double lat, double lon);
+    bool crossesAntiMeridian(double lon1, double lon2);
+};
+
+// ✅ Register bindings with Emscripten
+EMSCRIPTEN_BINDINGS(seasight_router) {
+    emscripten::class_<RouterWrapper>("RouterWrapper")
+        .constructor<double, double, double, double, double, double>()
+        .function("solve", &RouterWrapper::solve)
+        .function("solveIsochrone", &RouterWrapper::solveIsochrone)
+        .function("gridToLatLon", &RouterWrapper::gridToLatLon)
+        .function("latLonToGrid", &RouterWrapper::latLonToGrid)
+        .function("crossesAntiMeridian", &RouterWrapper::crossesAntiMeridian);
+}
+```
+
+## 🔧 Build Configuration
+
+### CMake Configuration
+```cmake
+# ✅ Set C++17 standard and Emscripten flags
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -s WASM_BIGINT")
+
+# ✅ Configure Emscripten output
+set_target_properties(SeaSightRouter PROPERTIES
+    SUFFIX ".js"
+    LINK_FLAGS "-s NO_EXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORT_NAME=SeaSightRouterModule -s ENVIRONMENT=web,worker -s ALLOW_MEMORY_GROWTH=1 -lembind -pthread -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4"
+)
+```
+
+### Build Scripts
+```bash
+# ✅ Build router with Emscripten
+cd packages/router-core/src
+emcmake cmake .
+emmake make
+
+# ✅ Copy output to WASM package
+cp SeaSightRouter.js SeaSightRouter.wasm ../router-wasm/dist/
+```
+
+## 🎯 TypeScript Integration
+
+### WASM Module Types
+```typescript
+// ✅ Define comprehensive TypeScript interfaces
+export interface RouterWrapper {
+  loadLandMask(bytes: Uint8Array): void;
+  loadEnvironmentPack(
+    meta: EnvironmentPackMeta,
+    curU: Float32Array,
+    curV: Float32Array,
+    waveHs?: Float32Array,
+    landMask?: Uint8Array,
+    shallowMask?: Uint8Array
+  ): void;
+  setSafetyCaps(maxWaveHeight: number, maxHeadingChange: number, minWaterDepth: number): void;
+  solve(startI: number, startJ: number, goalI: number, goalJ: number, startTime?: number): AStarNode[];
+  solveIsochrone(request: unknown, sampler?: unknown): IsochroneResult;
+  gridToLatLon(i: number, j: number): { lat: number; lon: number };
+  latLonToGrid(lat: number, lon: number): { i: number; j: number };
+  crossesAntiMeridian(lon1: number, lon2: number): boolean;
+}
+
+export interface SeaSightRouterModule {
+  RouterWrapper: new (
+    lat0: number,
+    lat1: number,
+    lon0: number,
+    lon1: number,
+    dLat: number,
+    dLon: number
+  ) => RouterWrapper;
+}
+
+// ✅ Declare module with proper typing
+declare const SeaSightRouterModule: () => Promise<SeaSightRouterModule>;
+export default SeaSightRouterModule;
+```
+
+### Worker Integration
+```typescript
+// ✅ Create worker-compatible wrapper
+export function createSeaSightRouterWorker() {
+  return {
+    async initialize() {
+      if (moduleInstance) return moduleInstance;
+      
+      if (isInitializing) {
+        while (isInitializing) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        return moduleInstance;
+      }
+      
+      isInitializing = true;
+      try {
+        moduleInstance = await SeaSightRouterModule();
+        return moduleInstance;
+      } finally {
+        isInitializing = false;
+      }
+    },
+    
+    async getModule() {
+      if (!moduleInstance) {
+        await this.initialize();
+      }
+      return moduleInstance;
+    }
+  };
+}
+```
+
+## 🚀 Service Layer Integration
+
+### Router Service Pattern
+```typescript
+// ✅ Create high-level service wrapper
+export class RouterService {
+  private module: SeaSightRouterModule | null = null;
+  private router: RouterWrapper | null = null;
+  
+  async initialize(): Promise<void> {
+    if (this.module) return;
+    
+    try {
+      this.module = await SeaSightRouterModule();
+      this.router = new this.module.RouterWrapper(
+        ROUTER_BOUNDS.lat0, ROUTER_BOUNDS.lat1,
+        ROUTER_BOUNDS.lon0, ROUTER_BOUNDS.lon1,
+        ROUTER_BOUNDS.dLat, ROUTER_BOUNDS.dLon
+      );
+    } catch (error) {
+      throw new RouterError('Failed to initialize router', { error });
+    }
+  }
+  
+  async solveRoute(waypoints: Waypoint[]): Promise<RouteResponse> {
+    if (!this.router) {
+      throw new RouterError('Router not initialized');
+    }
+    
+    try {
+      // Convert waypoints to grid coordinates
+      const gridWaypoints = waypoints.map(wp => 
+        this.router!.latLonToGrid(wp.lat, wp.lon)
+      );
+      
+      // Solve route using C++ algorithm
+      const result = this.router.solveIsochrone({
+        waypoints: gridWaypoints,
+        ship: this.getShipProfile()
+      });
+      
+      return this.convertResult(result);
+    } catch (error) {
+      throw new RouterError('Route solving failed', { error, waypoints });
+    }
+  }
+}
+```
+
+### Custom Hook Integration
+```typescript
+// ✅ Integrate WASM router with React hooks
+export const useRouter = (): UseRouterReturn => {
+  const [router, setRouter] = useState<RouterWrapper | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  useEffect(() => {
+    const initializeRouter = async () => {
+      try {
+        const service = new RouterService();
+        await service.initialize();
+        setRouter(service.getRouter());
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Router initialization failed:', error);
+      }
+    };
+    
+    initializeRouter();
+  }, []);
+  
+  const solveRoute = useCallback(async (waypoints: Waypoint[]): Promise<RouteResponse> => {
+    if (!router) {
+      throw new RouterError('Router not initialized');
+    }
+    
+    const service = new RouterService();
+    service.setRouter(router);
+    return service.solveRoute(waypoints);
+  }, [router]);
+  
+  return {
+    router,
+    isInitialized,
+    solveRoute,
+    crossesAntiMeridian: useCallback((lon1: number, lon2: number) => {
+      return router?.crossesAntiMeridian(lon1, lon2) ?? false;
+    }, [router])
+  };
+};
+```
+
+## 🔒 Security & Performance
+
+### Memory Management
+```cpp
+// ✅ Use RAII for memory management
+class RouterWrapper {
+private:
+    std::unique_ptr<IsochroneRouter> router;
+    std::unique_ptr<LandMaskData> land_mask;
+    
+public:
+    RouterWrapper(double lat0, double lat1, double lon0, double lon1, double d_lat, double d_lon)
+        : router(std::make_unique<IsochroneRouter>(lat0, lat1, lon0, lon1, d_lat, d_lon)) {}
+    
+    // ✅ Destructor automatically cleans up
+    ~RouterWrapper() = default;
+};
+```
+
+### Data Validation
+```typescript
+// ✅ Validate data before passing to WASM
+export const validateWaypoint = (waypoint: unknown): Waypoint => {
+  if (!waypoint || typeof waypoint !== 'object') {
+    throw new RouterError('Invalid waypoint: must be an object');
+  }
+  
+  const wp = waypoint as Record<string, unknown>;
+  
+  if (typeof wp.lat !== 'number' || wp.lat < -90 || wp.lat > 90) {
+    throw new RouterError('Invalid latitude: must be between -90 and 90');
+  }
+  
+  if (typeof wp.lon !== 'number' || wp.lon < -180 || wp.lon > 180) {
+    throw new RouterError('Invalid longitude: must be between -180 and 180');
+  }
+  
+  return {
+    lat: wp.lat,
+    lon: wp.lon,
+    time: wp.time as number ?? Date.now() / 1000,
+    headingDeg: wp.headingDeg as number,
+    isCourseChange: wp.isCourseChange as boolean ?? false
+  };
+};
+```
+
+### Error Handling
+```typescript
+// ✅ Comprehensive error handling for WASM operations
+export class RouterError extends SeaSightError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'ROUTER_ERROR', context);
+  }
+}
+
+export const safeWasmCall = async <T>(
+  operation: () => T,
+  errorContext: Record<string, unknown> = {}
+): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new RouterError(`WASM operation failed: ${error.message}`, {
+        ...errorContext,
+        originalError: error.message
+      });
+    }
+    throw new RouterError('Unknown WASM error', { ...errorContext, error });
+  }
+};
+```
+
+## 🧪 Testing WASM Integration
+
+### Mock WASM Module
+```typescript
+// ✅ Mock WASM module for testing
+vi.mock('@seasight/router-wasm', () => ({
+  default: vi.fn().mockResolvedValue({
+    RouterWrapper: vi.fn().mockImplementation(() => ({
+      solveIsochrone: vi.fn().mockReturnValue({
+        waypoints: [],
+        diagnostics: { totalDistanceNm: 100, eta: 24 }
+      }),
+      latLonToGrid: vi.fn().mockReturnValue({ i: 10, j: 20 }),
+      gridToLatLon: vi.fn().mockReturnValue({ lat: 40.7128, lon: -74.0060 }),
+      crossesAntiMeridian: vi.fn().mockReturnValue(false)
+    }))
+  })
+}));
+```
+
+### Integration Tests
+```typescript
+// ✅ Test WASM integration
+describe('RouterService', () => {
+  it('should initialize router correctly', async () => {
+    const service = new RouterService();
+    await service.initialize();
+    
+    expect(service.isInitialized()).toBe(true);
+  });
+  
+  it('should solve route with valid waypoints', async () => {
+    const service = new RouterService();
+    await service.initialize();
+    
+    const waypoints: Waypoint[] = [
+      { lat: 40.7128, lon: -74.0060 },
+      { lat: 34.0522, lon: -118.2437 }
+    ];
+    
+    const result = await service.solveRoute(waypoints);
+    
+    expect(result.waypoints).toBeDefined();
+    expect(result.diagnostics.totalDistanceNm).toBeGreaterThan(0);
+  });
+});
+```
+
+## 📊 Performance Monitoring
+
+### WASM Performance Tracking
+```typescript
+// ✅ Monitor WASM performance
+export const trackWasmPerformance = (operation: string, fn: () => any) => {
+  const start = performance.now();
+  const result = fn();
+  const end = performance.now();
+  
+  console.log(`WASM ${operation}: ${(end - start).toFixed(2)}ms`);
+  
+  return result;
+};
+
+// ✅ Use in service calls
+export class RouterService {
+  async solveRoute(waypoints: Waypoint[]): Promise<RouteResponse> {
+    return trackWasmPerformance('solveRoute', () => {
+      // WASM operation
+      return this.router.solveIsochrone(request);
+    });
+  }
+}
+```
+
+### Memory Usage Monitoring
+```typescript
+// ✅ Monitor WASM memory usage
+export const monitorWasmMemory = () => {
+  if (typeof performance !== 'undefined' && 'memory' in performance) {
+    const memory = (performance as any).memory;
+    console.log('WASM Memory Usage:', {
+      used: `${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB`,
+      total: `${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)} MB`,
+      limit: `${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)} MB`
+    });
+  }
+};
+```
+    });
+  }
+};
+```

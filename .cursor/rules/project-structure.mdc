@@ -1,0 +1,117 @@
+---
+alwaysApply: true
+description: SeaSight project structure and architecture guidelines
+---
+
+# SeaSight Project Structure & Architecture
+
+## 🏗️ Monorepo Architecture
+
+SeaSight is a maritime routing application built as a monorepo with clear separation of concerns:
+
+### Core Applications
+- **`apps/web`** - React PWA frontend with maritime UI
+- **`packages/router-core`** - C++17 router source with time-dependent A* algorithm  
+- **`packages/router-wasm`** - WebAssembly build output and TypeScript bindings
+- **`tools/packs-builder`** - Python tools for meteorological data processing
+
+### Key Directories
+- **`apps/web/src/features/`** - Feature-based modules (map, route-planner, vessel)
+- **`apps/web/src/shared/`** - Shared utilities, components, types, and hooks
+- **`packages/router-core/src/`** - C++ router implementation with Emscripten bindings
+- **`docs/`** - Comprehensive technical documentation
+
+## 🧩 Feature-First Architecture
+
+The frontend follows a feature-first structure for better maintainability:
+
+```
+apps/web/src/
+├── features/                    # Feature modules
+│   ├── map/                    # Map components and visualization
+│   ├── route-planner/          # Route planning functionality  
+│   └── vessel/                 # Vessel profile management
+├── shared/                     # Shared utilities and components
+│   ├── ui/                     # Reusable UI components
+│   ├── hooks/                  # Custom hooks
+│   ├── utils/                  # Utility functions
+│   ├── types/                  # TypeScript definitions
+│   └── constants/              # App constants
+└── lib/                        # External library configurations
+```
+
+## 🔧 Technology Stack
+
+### Frontend Stack
+- **React 19** with TypeScript strict mode
+- **Vite** for fast development and building
+- **MapLibre GL** for maritime mapping
+- **Custom hooks** for state management (no external state library)
+- **Dexie** for IndexedDB offline storage
+
+### Backend Stack  
+- **C++17** → **WebAssembly** via Emscripten
+- **Python** with NumPy/SciPy for data processing
+- **CMake** for C++ build system
+- **npm workspaces** for monorepo management
+
+## 📁 File Organization Patterns
+
+### Import Path Aliases
+Use these path aliases defined in [vite.config.ts](mdc:apps/web/vite.config.ts):
+- `@features/*` → `src/features/*`
+- `@shared/*` → `src/shared/*` 
+- `@lib/*` → `src/lib/*`
+
+### Naming Conventions
+- **Components**: PascalCase (e.g., `MapSimplified.tsx`)
+- **Hooks**: camelCase starting with 'use' (e.g., `useRouter.ts`)
+- **Utilities**: camelCase (e.g., `errorHandling.ts`)
+- **Types**: PascalCase interfaces (e.g., `Waypoint`, `RouteResponse`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `MAP_LAYERS`)
+
+### File Structure Standards
+- **One component per file** with matching filename
+- **Co-located tests** in `__tests__/` directories
+- **JSDoc documentation** for all public APIs
+- **TypeScript strict mode** with comprehensive type definitions
+
+## 🚀 Development Workflow
+
+### Build Commands
+- `npm run dev` - Start development server
+- `npm run build:router` - Build WASM router only (after C++ changes)
+- `npm run build:clean` - Clean build + dependencies
+- `npm run build:full` - Complete clean build (first setup)
+
+### When to Rebuild
+- **Always**: Router C++ code changes (`packages/router-core/src/*.cpp`)
+- **Sometimes**: Dependency changes, environment changes  
+- **Never**: Frontend-only changes (React, TypeScript, CSS)
+
+## 🔒 Security & Performance
+
+### WebAssembly Security
+- **COOP/COEP headers** required for WASM shared memory
+- **Memory isolation** - WASM runs in isolated memory space
+- **Buffer validation** - All data passed to WASM is validated
+
+### Performance Characteristics
+- **WASM Module**: ~2MB compressed
+- **Data Packs**: ~50MB per region
+- **Typical Route**: 100-500 waypoints in <1 second
+- **Offline Capable**: Full functionality without internet
+
+## 📚 Documentation Standards
+
+### Required Documentation
+- **JSDoc comments** for all public functions and components
+- **README files** in each major directory
+- **Architecture decisions** documented in `docs/`
+- **API documentation** with examples
+
+### Code Comments
+- **Section dividers** with `// ============================================================================`
+- **Inline comments** for complex algorithms
+- **TODO comments** for future improvements
+- **Maritime terminology** used consistently

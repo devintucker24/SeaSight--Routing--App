@@ -58,28 +58,41 @@ function App() {
   }
 
   const runRouteSolve = useCallback(async () => {
-    if (!mapRef.current || waypoints.length < 2) return
+    console.log('🔍 [ROUTE] Attempting solve with', waypoints.length, 'waypoints');
+    
+    if (!mapRef.current || waypoints.length < 2) {
+      console.log('❌ [ROUTE] Blocked: need 2+ waypoints, have', waypoints.length);
+      // Not enough waypoints
+      return;
+    }
 
     const start = waypoints[0]
     const end = waypoints[waypoints.length - 1]
     const solveKey = `${start.lat.toFixed(4)},${start.lon.toFixed(4)}|${end.lat.toFixed(4)},${end.lon.toFixed(4)}`
+
 
     recordSolveAttempt(solveKey)
     setIsCalculating(true)
     try {
       debugRouter.logRouteCalculation(start, end, routingMode)
       await mapRef.current.calculateRoute()
+      console.log('✅ Route calculated:', waypoints.length, 'waypoints');
     } catch (error) {
       debugRouter.logRouterError(error)
-      console.error('Route planning failed:', error)
+      console.error('❌ [APP] Route planning failed:', error)
     } finally {
       setIsCalculating(false)
     }
   }, [recordSolveAttempt, routingMode, waypoints])
 
   useEffect(() => {
-    if (waypoints.length >= 2) {
-      void runRouteSolve()
+    console.log('🎯 [ROUTE] useEffect - waypoints:', waypoints.length);
+    if (waypoints.length === 2) {
+      console.log('▶️  [ROUTE] Triggering solve for 2 waypoints');
+      void runRouteSolve();
+    } else if (waypoints.length > 2) {
+      void runRouteSolve();
+    } else {
     }
   }, [routingMode, runRouteSolve, waypoints.length])
 
@@ -128,7 +141,9 @@ function App() {
   }
 
   useEffect(() => {
+    console.log('🎯 [ROUTE] useEffect - waypoints:', waypoints.length);
     if (waypoints.length === 2) {
+      console.log('▶️  [ROUTE] Triggering solve for 2 waypoints');
       const start = waypoints[0]
       const destination = waypoints[1]
       const key = `${start.lat.toFixed(4)},${start.lon.toFixed(4)}|${destination.lat.toFixed(4)},${destination.lon.toFixed(4)}`

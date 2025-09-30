@@ -94,7 +94,9 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
   // Initialize router on component mount (runs only once)
   useEffect(() => {
     const initializeRouterService = async () => {
+      console.log('🚀 [INIT DEBUG] Starting router initialization...');
       try {
+        console.log('🚀 [INIT DEBUG] Calling initializeRouter with config...');
         await initializeRouter({
           lat0: -80.0,
           lat1: 80.0,
@@ -103,18 +105,28 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
           dLat: 0.5,
           dLon: 0.5
         });
+        console.log('🚀 [INIT DEBUG] initializeRouter completed successfully');
 
         // Set default safety caps
+        console.log('🚀 [INIT DEBUG] Setting safety caps...');
         setSafetyCaps({
           maxWaveHeight: 6.0,
           maxHeadingChange: 30.0,
           minWaterDepth: 15.0
         });
+        console.log('🚀 [INIT DEBUG] Safety caps set');
+
+        console.log('🚀 [INIT DEBUG] Router service initialization complete!');
       } catch (err) {
-        console.error('Failed to initialize router:', err);
+        console.error('🚀 [INIT DEBUG] Router initialization FAILED:', err);
+        console.error('🚀 [INIT DEBUG] Error details:', {
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined
+        });
       }
     };
 
+    console.log('🚀 [INIT DEBUG] useEffect triggered, calling initializeRouterService...');
     initializeRouterService();
   }, [initializeRouter, setSafetyCaps]);
 
@@ -149,18 +161,33 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
 
   // Calculate route between waypoints with fallback straight line
   const calculateRoute = useCallback(async () => {
-    if (waypoints.length < 2 || !isInitialized) return;
+    console.log('🚢 [ROUTE DEBUG] calculateRoute called', { 
+      waypoints: waypoints.length, 
+      isInitialized,
+      routingMode 
+    });
+    
+    if (waypoints.length < 2 || !isInitialized) {
+      console.log('🚢 [ROUTE DEBUG] Not enough waypoints or not initialized');
+      return;
+    }
 
     const t0 = performance.now()
     try {
       const start = waypoints[0]
       const end = waypoints[waypoints.length - 1]
+      
+      console.log('🚢 [ROUTE DEBUG] Calling solveRoute', { start, end, routingMode });
+      
       const res = await solveRoute(start, end, 0, {
         mode: routingMode,
         isochrone: routingMode === 'ISOCHRONE' ? isochroneOptions : undefined,
         start,
         goal: end,
       })
+      
+      console.log('🚢 [ROUTE DEBUG] solveRoute returned:', res);
+      
       const elapsedMs = Math.round(performance.now() - t0)
       debugRouter.logRouteResult(res, elapsedMs)
       if (routingMode === 'ISOCHRONE' && (res.waypoints?.length ?? 0) <= 1) {
@@ -184,6 +211,7 @@ const MapSimplified = forwardRef<MapRef, MapProps>(({ waypoints, route, routeWay
       // --- END ADDITION ---
 
     } catch (err) {
+      console.error('🚢 [ROUTE DEBUG] solveRoute failed:', err);
       const start = waypoints[0]
       const end = waypoints[waypoints.length - 1]
       onRouteCalculated?.([start, end])

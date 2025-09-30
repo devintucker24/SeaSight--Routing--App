@@ -1,0 +1,446 @@
+---
+globs: *.tsx,*.jsx
+description: React component patterns and best practices for SeaSight
+---
+
+# React Component Patterns
+
+## 🎯 Component Architecture
+
+### Feature-First Organization
+Components are organized by features in [apps/web/src/features/](mdc:apps/web/src/features/):
+- **`map/`** - Map visualization and interaction components
+- **`route-planner/`** - Route planning and calculation components  
+- **`vessel/`** - Vessel profile and configuration components
+
+### Component Hierarchy
+```
+App.tsx (Root component)
+├── MapSimplified (Map interface)
+│   ├── MapLibre GL Integration
+│   ├── Waypoint Management
+│   └── Route Visualization
+├── RoutePlanner (Route planning)
+│   ├── Waypoint Input
+│   ├── Route Controls
+│   └── Results Display
+├── VesselProfile (Vessel management)
+│   ├── Vessel Selection
+│   ├── Safety Settings
+│   └── AIS Integration
+└── Shared UI Components
+    ├── SlidePanel
+    ├── ActionDock
+    └── StatusLedger
+```
+
+## 🧩 Component Patterns
+
+### Functional Components with TypeScript
+```typescript
+// ✅ Use functional components with explicit props interface
+interface MapSimplifiedProps {
+  waypoints: Waypoint[];
+  route: LatLonPosition[];
+  onWaypointAdd: (coords: { lat: number; lon: number }) => void;
+  onWaypointRemove: (id: string) => void;
+  mapStyle?: MapStyle;
+}
+
+export default function MapSimplified({
+  waypoints,
+  route,
+  onWaypointAdd,
+  onWaypointRemove,
+  mapStyle = 'dark-maritime'
+}: MapSimplifiedProps) {
+  // Component implementation
+}
+```
+
+### Component with Ref Forwarding
+```typescript
+// ✅ Use forwardRef for components that need ref access
+export interface MapRef {
+  getCenter: () => { lat: number; lon: number };
+  setCenter: (center: { lat: number; lon: number }) => void;
+  fitToWaypoints: (waypoints: Waypoint[]) => void;
+}
+
+export default forwardRef<MapRef, MapSimplifiedProps>(
+  function MapSimplified(props, ref) {
+    const mapRef = useRef<maplibregl.Map | null>(null);
+    
+    useImperativeHandle(ref, () => ({
+      getCenter: () => mapRef.current?.getCenter(),
+      setCenter: (center) => mapRef.current?.setCenter(center),
+      fitToWaypoints: (waypoints) => {
+        // Implementation
+      }
+    }));
+    
+    return <div ref={mapRef} className="map-container" />;
+  }
+);
+```
+
+### Custom Hook Integration
+```typescript
+// ✅ Use custom hooks for state management
+export default function App() {
+  const {
+    waypoints,
+    route,
+    routeResult,
+    addWaypoint,
+    removeWaypoint,
+    clearWaypoints,
+    handleRouteSolved
+  } = useAppState();
+  
+  const mapRef = useRef<MapRef>(null);
+  
+  // Component implementation
+}
+```
+
+## 🎣 State Management Patterns
+
+### Custom Hooks for State
+```typescript
+// ✅ Centralized state management with custom hooks
+export const useAppState = () => {
+  // Core state
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [route, setRoute] = useState<LatLonPosition[]>([]);
+  const [isCalculating, setIsCalculating] = useState(false);
+  
+  // Memoized derived state
+  const waypointCount = useMemo(() => waypoints.length, [waypoints]);
+  const mapWaypoints = useMemo(() => 
+    waypoints.map(wp => ({ lat: wp.lat, lon: wp.lon })), 
+    [waypoints]
+  );
+  
+  // Callback functions
+  const addWaypoint = useCallback((coords: { lat: number; lon: number }) => {
+    const newWaypoint = createWaypoint(coords);
+    setWaypoints(prev => [...prev, newWaypoint]);
+  }, []);
+  
+  const removeWaypoint = useCallback((id: string) => {
+    setWaypoints(prev => prev.filter(wp => wp.id !== id));
+  }, []);
+  
+  return {
+    waypoints,
+    route,
+    isCalculating,
+    waypointCount,
+    mapWaypoints,
+    addWaypoint,
+    removeWaypoint,
+    setIsCalculating
+  };
+};
+```
+
+### Local State vs Global State
+```typescript
+// ✅ Use local state for component-specific data
+function RoutePlanner() {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedVessel, setSelectedVessel] = useState<VesselProfile | null>(null);
+  
+  // Use global state for shared data
+  const { waypoints, addWaypoint } = useAppState();
+  
+  return (
+    <div className={`route-planner ${isExpanded ? 'expanded' : ''}`}>
+      {/* Component content */}
+    </div>
+  );
+}
+```
+
+## 🎨 UI Component Patterns
+
+### Maritime-Themed Components
+```typescript
+// ✅ Use maritime terminology and styling
+export default function StatusLedger({ 
+  routeResult, 
+  isCalculating 
+}: StatusLedgerProps) {
+  return (
+    <div className="status-ledger maritime-theme">
+      <div className="status-item">
+        <span className="label">Course:</span>
+        <span className="value">{routeResult?.totalDistanceNm?.toFixed(1)} nm</span>
+      </div>
+      <div className="status-item">
+        <span className="label">ETA:</span>
+        <span className="value">{formatEta(routeResult?.eta)}</span>
+      </div>
+      {isCalculating && (
+        <div className="calculating-indicator">
+          <span>⚓ Calculating route...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Responsive Design Patterns
+```typescript
+// ✅ Use responsive design for maritime environments
+export default function SlidePanel({ 
+  isOpen, 
+  onClose, 
+  children 
+}: SlidePanelProps) {
+  return (
+    <div className={`slide-panel ${isOpen ? 'open' : ''}`}>
+      <div className="panel-header">
+        <button 
+          className="close-button maritime-button"
+          onClick={onClose}
+          aria-label="Close panel"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="panel-content">
+        {children}
+      </div>
+    </div>
+  );
+}
+```
+
+## 🔄 Event Handling Patterns
+
+### Event Handler Naming
+```typescript
+// ✅ Use descriptive event handler names
+export default function MapSimplified({ onWaypointAdd, onWaypointRemove }: MapProps) {
+  const handleMapClick = useCallback((lngLat: [number, number]) => {
+    onWaypointAdd({ lat: lngLat[1], lon: lngLat[0] });
+  }, [onWaypointAdd]);
+  
+  const handleWaypointClick = useCallback((waypointId: string) => {
+    // Handle waypoint interaction
+  }, []);
+  
+  const handleRouteUpdate = useCallback((newRoute: LatLonPosition[]) => {
+    // Handle route updates
+  }, []);
+  
+  return (
+    <div 
+      className="map-container"
+      onClick={handleMapClick}
+    >
+      {/* Map content */}
+    </div>
+  );
+}
+```
+
+### Async Event Handling
+```typescript
+// ✅ Handle async operations properly
+export default function RoutePlanner() {
+  const { solveRoute, isCalculating } = useRouter();
+  
+  const handleSolveRoute = useCallback(async () => {
+    if (isCalculating) return;
+    
+    try {
+      setIsCalculating(true);
+      const result = await solveRoute(waypoints);
+      handleRouteSolved(result);
+    } catch (error) {
+      console.error('Route solving failed:', error);
+      // Handle error appropriately
+    } finally {
+      setIsCalculating(false);
+    }
+  }, [waypoints, solveRoute, isCalculating]);
+  
+  return (
+    <button 
+      onClick={handleSolveRoute}
+      disabled={isCalculating || waypoints.length < 2}
+      className="solve-button"
+    >
+      {isCalculating ? '⚓ Calculating...' : '⚓ Solve Route'}
+    </button>
+  );
+}
+```
+
+## 🎯 Performance Optimization
+
+### Memoization Patterns
+```typescript
+// ✅ Use React.memo for expensive components
+export default React.memo(function MapSimplified({
+  waypoints,
+  route,
+  onWaypointAdd
+}: MapSimplifiedProps) {
+  // Component implementation
+});
+
+// ✅ Use useMemo for expensive calculations
+export default function RoutePlanner({ waypoints }: RoutePlannerProps) {
+  const routeStats = useMemo(() => {
+    if (waypoints.length < 2) return null;
+    
+    return {
+      totalDistance: calculateTotalDistance(waypoints),
+      estimatedTime: calculateEstimatedTime(waypoints),
+      waypointCount: waypoints.length
+    };
+  }, [waypoints]);
+  
+  return (
+    <div className="route-planner">
+      {routeStats && (
+        <div className="route-stats">
+          <span>Distance: {routeStats.totalDistance.toFixed(1)} nm</span>
+          <span>Waypoints: {routeStats.waypointCount}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Callback Optimization
+```typescript
+// ✅ Use useCallback for event handlers passed to children
+export default function App() {
+  const { addWaypoint, removeWaypoint } = useAppState();
+  
+  const handleWaypointAdd = useCallback((coords: { lat: number; lon: number }) => {
+    addWaypoint(coords);
+  }, [addWaypoint]);
+  
+  const handleWaypointRemove = useCallback((id: string) => {
+    removeWaypoint(id);
+  }, [removeWaypoint]);
+  
+  return (
+    <div className="app">
+      <MapSimplified 
+        onWaypointAdd={handleWaypointAdd}
+        onWaypointRemove={handleWaypointRemove}
+      />
+    </div>
+  );
+}
+```
+
+## 🧪 Testing Patterns
+
+### Component Testing
+```typescript
+// ✅ Test component behavior, not implementation
+describe('MapSimplified', () => {
+  it('should add waypoint when map is clicked', async () => {
+    const onWaypointAdd = vi.fn();
+    render(<MapSimplified waypoints={[]} onWaypointAdd={onWaypointAdd} />);
+    
+    const mapContainer = screen.getByRole('button', { name: /map/i });
+    await user.click(mapContainer);
+    
+    expect(onWaypointAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lat: expect.any(Number),
+        lon: expect.any(Number)
+      })
+    );
+  });
+  
+  it('should display waypoints on the map', () => {
+    const waypoints: Waypoint[] = [
+      { lat: 40.7128, lon: -74.0060 },
+      { lat: 34.0522, lon: -118.2437 }
+    ];
+    
+    render(<MapSimplified waypoints={waypoints} onWaypointAdd={vi.fn()} />);
+    
+    waypoints.forEach(waypoint => {
+      expect(screen.getByText(`${waypoint.lat}, ${waypoint.lon}`)).toBeInTheDocument();
+    });
+  });
+});
+```
+
+### Hook Testing
+```typescript
+// ✅ Test custom hooks with renderHook
+describe('useAppState', () => {
+  it('should add waypoint correctly', () => {
+    const { result } = renderHook(() => useAppState());
+    
+    act(() => {
+      result.current.addWaypoint({ lat: 40.7128, lon: -74.0060 });
+    });
+    
+    expect(result.current.waypoints).toHaveLength(1);
+    expect(result.current.waypoints[0]).toMatchObject({
+      lat: 40.7128,
+      lon: -74.0060
+    });
+  });
+});
+```
+
+## 🎨 Styling Patterns
+
+### CSS Class Naming
+```typescript
+// ✅ Use BEM-like naming for maritime components
+export default function StatusLedger({ routeResult }: StatusLedgerProps) {
+  return (
+    <div className="status-ledger">
+      <div className="status-ledger__item">
+        <span className="status-ledger__label">Course:</span>
+        <span className="status-ledger__value">{routeResult?.totalDistanceNm}</span>
+      </div>
+      <div className="status-ledger__item status-ledger__item--highlight">
+        <span className="status-ledger__label">ETA:</span>
+        <span className="status-ledger__value">{formatEta(routeResult?.eta)}</span>
+      </div>
+    </div>
+  );
+}
+```
+
+### Conditional Styling
+```typescript
+// ✅ Use conditional classes for state-based styling
+export default function RoutePlanner({ isExpanded, isCalculating }: RoutePlannerProps) {
+  return (
+    <div className={`
+      route-planner 
+      ${isExpanded ? 'route-planner--expanded' : ''}
+      ${isCalculating ? 'route-planner--calculating' : ''}
+    `}>
+      <button 
+        className={`
+          solve-button 
+          ${isCalculating ? 'solve-button--disabled' : ''}
+        `}
+        disabled={isCalculating}
+      >
+        {isCalculating ? '⚓ Calculating...' : '⚓ Solve Route'}
+      </button>
+    </div>
+  );
+}
+```

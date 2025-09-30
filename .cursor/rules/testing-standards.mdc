@@ -1,0 +1,494 @@
+---
+globs: *.test.ts,*.test.tsx,*.spec.ts,*.spec.tsx
+description: Testing standards and patterns for SeaSight application
+---
+
+# Testing Standards & Patterns
+
+## 🧪 Testing Framework Configuration
+
+### Test Setup
+Tests are configured in [apps/web/src/__tests__/setup.ts](mdc:apps/web/src/__tests__/setup.ts):
+- **Vitest** as the test runner
+- **React Testing Library** for component testing
+- **Jest DOM matchers** for DOM assertions
+- **Automatic cleanup** after each test
+
+```typescript
+// ✅ Test setup configuration
+import { expect, afterEach, vi, beforeEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import * as matchers from '@testing-library/jest-dom/matchers';
+
+expect.extend(matchers);
+
+afterEach(() => {
+  cleanup();
+});
+```
+
+### Test Configuration
+```typescript
+// ✅ Vitest configuration in vitest.config.ts
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/__tests__/setup.ts'],
+    globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: ['node_modules/', 'dist/', '**/*.d.ts']
+    }
+  }
+});
+```
+
+## 🎯 Testing Patterns
+
+### Component Testing
+```typescript
+// ✅ Test component behavior, not implementation
+describe('MapSimplified', () => {
+  it('should render waypoints on the map', () => {
+    const waypoints: Waypoint[] = [
+      { lat: 40.7128, lon: -74.0060 },
+      { lat: 34.0522, lon: -118.2437 }
+    ];
+    
+    render(<MapSimplified waypoints={waypoints} onWaypointAdd={vi.fn()} />);
+    
+    waypoints.forEach(waypoint => {
+      expect(screen.getByText(`${waypoint.lat}, ${waypoint.lon}`)).toBeInTheDocument();
+    });
+  });
+  
+  it('should call onWaypointAdd when map is clicked', async () => {
+    const onWaypointAdd = vi.fn();
+    const user = userEvent.setup();
+    
+    render(<MapSimplified waypoints={[]} onWaypointAdd={onWaypointAdd} />);
+    
+    const mapContainer = screen.getByRole('button', { name: /map/i });
+    await user.click(mapContainer);
+    
+    expect(onWaypointAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lat: expect.any(Number),
+        lon: expect.any(Number)
+      })
+    );
+  });
+});
+```
+
+### Hook Testing
+```typescript
+// ✅ Test custom hooks with renderHook
+describe('useAppState', () => {
+  it('should add waypoint correctly', () => {
+    const { result } = renderHook(() => useAppState());
+    
+    act(() => {
+      result.current.addWaypoint({ lat: 40.7128, lon: -74.0060 });
+    });
+    
+    expect(result.current.waypoints).toHaveLength(1);
+    expect(result.current.waypoints[0]).toMatchObject({
+      lat: 40.7128,
+      lon: -74.0060
+    });
+  });
+  
+  it('should remove waypoint by id', () => {
+    const { result } = renderHook(() => useAppState());
+    
+    act(() => {
+      result.current.addWaypoint({ lat: 40.7128, lon: -74.0060 });
+      result.current.addWaypoint({ lat: 34.0522, lon: -118.2437 });
+    });
+    
+    const firstWaypointId = result.current.waypoints[0].id;
+    
+    act(() => {
+      result.current.removeWaypoint(firstWaypointId);
+    });
+    
+    expect(result.current.waypoints).toHaveLength(1);
+    expect(result.current.waypoints[0].lat).toBe(34.0522);
+  });
+});
+```
+
+### Service Testing
+```typescript
+// ✅ Test service layer with mocked dependencies
+describe('RouterService', () => {
+  let service: RouterService;
+  
+  beforeEach(() => {
+    service = new RouterService();
+    // Mock WASM module
+    vi.mocked(SeaSightRouterModule).mockResolvedValue({
+      RouterWrapper: vi.fn().mockImplementation(() => ({
+        solveIsochrone: vi.fn().mockReturnValue({
+          waypoints: [],
+          diagnostics: { totalDistanceNm: 100, eta: 24 }
+        }),
+        latLonToGrid: vi.fn().mockReturnValue({ i: 10, j: 20 }),
+        gridToLatLon: vi.fn().mockReturnValue({ lat: 40.7128, lon: -74.0060 })
+      }))
+    });
+  });
+  
+  it('should initialize router correctly', async () => {
+    await service.initialize();
+    expect(service.isInitialized()).toBe(true);
+  });
+  
+  it('should solve route with valid waypoints', async () => {
+    await service.initialize();
+    
+    const waypoints: Waypoint[] = [
+      { lat: 40.7128, lon: -74.0060 },
+      { lat: 34.0522, lon: -118.2437 }
+    ];
+    
+    const result = await service.solveRoute(waypoints);
+    
+    expect(result.waypoints).toBeDefined();
+    expect(result.diagnostics.totalDistanceNm).toBeGreaterThan(0);
+  });
+});
+```
+
+## 🎭 Mocking Patterns
+
+### External Dependencies
+```typescript
+// ✅ Mock external libraries
+vi.mock('maplibre-gl', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    on: vi.fn(),
+    off: vi.fn(),
+    getCenter: vi.fn().mockReturnValue({ lat: 40.7128, lng: -74.0060 }),
+    setCenter: vi.fn(),
+    fitBounds: vi.fn()
+  }))
+}));
+
+// ✅ Mock WASM modules
+vi.mock('@seasight/router-wasm', () => ({
+  default: vi.fn().mockResolvedValue({
+    RouterWrapper: vi.fn().mockImplementation(() => ({
+      solveIsochrone: vi.fn(),
+      latLonToGrid: vi.fn(),
+      gridToLatLon: vi.fn()
+    }))
+  })
+}));
+```
+
+### API Responses
+```typescript
+// ✅ Mock API responses
+vi.mock('@shared/services/api', () => ({
+  fetchWeatherData: vi.fn().mockResolvedValue({
+    lat: 40.7128,
+    lon: -74.0060,
+    waveHeight: 2.5,
+    windSpeed: 15.0,
+    timestamp: Date.now()
+  }),
+  
+  fetchAISData: vi.fn().mockResolvedValue([
+    {
+      mmsi: '123456789',
+      lat: 40.7128,
+      lon: -74.0060,
+      speed: 12.5,
+      heading: 180
+    }
+  ])
+}));
+```
+
+### Browser APIs
+```typescript
+// ✅ Mock browser APIs
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  }))
+});
+
+// ✅ Mock IndexedDB
+vi.mock('dexie', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    waypoints: {
+      toArray: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockResolvedValue(1),
+      delete: vi.fn().mockResolvedValue(1)
+    }
+  }))
+}));
+```
+
+## 🧪 Test Data Patterns
+
+### Test Data Factories
+```typescript
+// ✅ Create test data factories
+export const createTestWaypoint = (overrides: Partial<Waypoint> = {}): Waypoint => ({
+  lat: 40.7128,
+  lon: -74.0060,
+  time: Date.now() / 1000,
+  headingDeg: 0,
+  isCourseChange: false,
+  ...overrides
+});
+
+export const createTestRoute = (waypointCount: number = 3): Waypoint[] => {
+  return Array.from({ length: waypointCount }, (_, i) => 
+    createTestWaypoint({
+      lat: 40.7128 + i * 0.1,
+      lon: -74.0060 + i * 0.1
+    })
+  );
+};
+
+export const createTestRouteResponse = (): RouteResponse => ({
+  waypoints: createTestRoute(),
+  diagnostics: {
+    totalDistanceNm: 100.5,
+    averageSpeedKts: 12.0,
+    maxWaveHeightM: 2.5,
+    stepCount: 50,
+    frontierCount: 25,
+    reachedGoal: true,
+    finalDistanceToGoalNm: 0.1,
+    etaHours: 8.5
+  },
+  eta: Date.now() / 1000 + 8.5 * 3600,
+  totalDistanceNm: 100.5
+});
+```
+
+### Test Utilities
+```typescript
+// ✅ Create test utilities
+export const renderWithProviders = (
+  ui: React.ReactElement,
+  options: RenderOptions = {}
+) => {
+  const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
+    return (
+      <div data-testid="test-provider">
+        {children}
+      </div>
+    );
+  };
+  
+  return render(ui, { wrapper: AllTheProviders, ...options });
+};
+
+export const waitForAsync = async (fn: () => void, timeout = 1000) => {
+  await waitFor(fn, { timeout });
+};
+```
+
+## 🎯 Assertion Patterns
+
+### Custom Matchers
+```typescript
+// ✅ Create custom matchers for maritime data
+expect.extend({
+  toBeValidWaypoint(received: Waypoint) {
+    const pass = 
+      typeof received.lat === 'number' &&
+      received.lat >= -90 &&
+      received.lat <= 90 &&
+      typeof received.lon === 'number' &&
+      received.lon >= -180 &&
+      received.lon <= 180;
+    
+    return {
+      pass,
+      message: () => 
+        pass 
+          ? `Expected ${received} not to be a valid waypoint`
+          : `Expected ${received} to be a valid waypoint`
+    };
+  },
+  
+  toBeValidRoute(received: RouteResponse) {
+    const pass = 
+      Array.isArray(received.waypoints) &&
+      received.waypoints.length >= 2 &&
+      typeof received.totalDistanceNm === 'number' &&
+      received.totalDistanceNm > 0;
+    
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `Expected ${received} not to be a valid route`
+          : `Expected ${received} to be a valid route`
+    };
+  }
+});
+```
+
+### Accessibility Testing
+```typescript
+// ✅ Test accessibility features
+describe('MapSimplified Accessibility', () => {
+  it('should be accessible to screen readers', () => {
+    render(<MapSimplified waypoints={[]} onWaypointAdd={vi.fn()} />);
+    
+    const mapElement = screen.getByRole('button', { name: /map/i });
+    expect(mapElement).toHaveAttribute('aria-label');
+    expect(mapElement).toHaveAttribute('tabindex');
+  });
+  
+  it('should support keyboard navigation', async () => {
+    const user = userEvent.setup();
+    render(<MapSimplified waypoints={[]} onWaypointAdd={vi.fn()} />);
+    
+    const mapElement = screen.getByRole('button', { name: /map/i });
+    await user.tab();
+    
+    expect(mapElement).toHaveFocus();
+  });
+});
+```
+
+## 🚀 Performance Testing
+
+### Performance Monitoring
+```typescript
+// ✅ Test performance characteristics
+describe('Router Performance', () => {
+  it('should solve route within acceptable time', async () => {
+    const service = new RouterService();
+    await service.initialize();
+    
+    const waypoints = createTestRoute(10);
+    
+    const start = performance.now();
+    const result = await service.solveRoute(waypoints);
+    const end = performance.now();
+    
+    expect(end - start).toBeLessThan(1000); // Should complete within 1 second
+    expect(result.waypoints).toBeDefined();
+  });
+  
+  it('should handle large waypoint arrays efficiently', async () => {
+    const service = new RouterService();
+    await service.initialize();
+    
+    const waypoints = createTestRoute(100);
+    
+    const start = performance.now();
+    const result = await service.solveRoute(waypoints);
+    const end = performance.now();
+    
+    expect(end - start).toBeLessThan(5000); // Should complete within 5 seconds
+    expect(result.waypoints.length).toBeGreaterThan(0);
+  });
+});
+```
+
+### Memory Testing
+```typescript
+// ✅ Test memory usage
+describe('Memory Management', () => {
+  it('should not leak memory during route solving', async () => {
+    const service = new RouterService();
+    await service.initialize();
+    
+    const initialMemory = (performance as any).memory?.usedJSHeapSize || 0;
+    
+    // Solve multiple routes
+    for (let i = 0; i < 10; i++) {
+      const waypoints = createTestRoute(5);
+      await service.solveRoute(waypoints);
+    }
+    
+    const finalMemory = (performance as any).memory?.usedJSHeapSize || 0;
+    const memoryIncrease = finalMemory - initialMemory;
+    
+    // Memory increase should be reasonable (less than 10MB)
+    expect(memoryIncrease).toBeLessThan(10 * 1024 * 1024);
+  });
+});
+```
+
+## 🧪 Integration Testing
+
+### End-to-End Scenarios
+```typescript
+// ✅ Test complete user workflows
+describe('Route Planning Workflow', () => {
+  it('should complete full route planning workflow', async () => {
+    const user = userEvent.setup();
+    
+    render(<App />);
+    
+    // Add waypoints
+    const mapElement = screen.getByRole('button', { name: /map/i });
+    await user.click(mapElement);
+    await user.click(mapElement);
+    
+    // Verify waypoints are added
+    expect(screen.getByText(/waypoints: 2/i)).toBeInTheDocument();
+    
+    // Solve route
+    const solveButton = screen.getByRole('button', { name: /solve route/i });
+    await user.click(solveButton);
+    
+    // Wait for route to be calculated
+    await waitFor(() => {
+      expect(screen.getByText(/route calculated/i)).toBeInTheDocument();
+    });
+    
+    // Verify route display
+    expect(screen.getByText(/distance:/i)).toBeInTheDocument();
+    expect(screen.getByText(/eta:/i)).toBeInTheDocument();
+  });
+});
+```
+
+### Error Handling Testing
+```typescript
+// ✅ Test error scenarios
+describe('Error Handling', () => {
+  it('should handle router initialization failure', async () => {
+    vi.mocked(SeaSightRouterModule).mockRejectedValue(new Error('WASM load failed'));
+    
+    const service = new RouterService();
+    
+    await expect(service.initialize()).rejects.toThrow('WASM load failed');
+  });
+  
+  it('should handle invalid waypoint data', async () => {
+    const service = new RouterService();
+    await service.initialize();
+    
+    const invalidWaypoints = [
+      { lat: 91, lon: -200 }, // Invalid coordinates
+      { lat: 'invalid', lon: 'invalid' } // Wrong types
+    ];
+    
+    await expect(service.solveRoute(invalidWaypoints as any)).rejects.toThrow();
+  });
+});
+```
