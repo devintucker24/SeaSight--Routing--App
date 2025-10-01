@@ -167,7 +167,7 @@ export const memoryMonitor = {
    * Get current memory usage (if available)
    * @returns Memory usage information or null if not available
    */
-  getMemoryUsage: (): MemoryInfo | null => {
+  getMemoryUsage: (): any | null => {
     if (DEBUG.LOG_PERFORMANCE && 'memory' in performance) {
       return (performance as any).memory;
     }

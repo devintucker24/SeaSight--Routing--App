@@ -9,10 +9,14 @@
     ".": {
       "types": "./dist/SeaSightRouter.d.ts",
       "default": "./dist/SeaSightRouter.js"
+    },
+    "./worker": {
+      "types": "./dist/SeaSightRouter.worker.d.ts",
+      "default": "./dist/SeaSightRouter.worker.js"
     }
   },
   "scripts": {
     "build": "emcmake cmake -S ../router-core/src -B ../router-core/build && cmake --build ../router-core/build",
-    "postbuild": "mkdir -p dist && cp ../router-core/build/SeaSightRouter.js ../router-core/build/SeaSightRouter.wasm ./dist/ && cp src/SeaSightRouter.d.ts ./dist/"
+    "postbuild": "mkdir -p dist && cp ../router-core/build/SeaSightRouter.js ../router-core/build/SeaSightRouter.wasm ./dist/ && cp src/SeaSightRouter.d.ts ./dist/ && cp src/SeaSightRouter.worker.js ./dist/ && cp src/SeaSightRouter.worker.d.ts ./dist/"
   }
 }

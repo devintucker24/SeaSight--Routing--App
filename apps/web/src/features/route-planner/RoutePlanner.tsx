@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import RouteDiagnostics from './components/RouteDiagnostics'
 
 /**
  * Waypoint interface for route planning
@@ -24,6 +25,8 @@ interface RoutePlannerProps {
   routeResult?: {
     mode: string
     waypoints: { lat: number; lon: number; time?: number }[]
+    diagnostics?: any
+    etaHours?: number
   } | null
   /** Callback when a waypoint is added */
   onWaypointAdd: (coords: { lat: number; lon: number }) => void
@@ -59,6 +62,9 @@ const RoutePlanner = ({ waypoints, routeResult, onWaypointAdd, onWaypointRemove,
     <div style={{
       color: 'var(--white)',
       padding: '0',
+      height: '100%',
+      overflowY: 'auto',
+      overflowX: 'hidden',
       minWidth: '300px'
     }}>
       <h3 style={{ 
@@ -308,6 +314,9 @@ const RoutePlanner = ({ waypoints, routeResult, onWaypointAdd, onWaypointRemove,
           </div>
         </div>
       )}
+
+      {/* Route Diagnostics */}
+      {routeResult && <RouteDiagnostics routeResult={routeResult as any} />}
     </div>
   )
 }

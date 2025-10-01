@@ -5,13 +5,18 @@
 // ============================================================================
 
 export class SeaSightError extends Error {
+  public code: string;
+  public context?: Record<string, unknown>;
+  
   constructor(
     message: string,
-    public code: string,
-    public context?: Record<string, unknown>
+    code: string,
+    context?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'SeaSightError';
+    this.code = code;
+    this.context = context;
   }
 }
 

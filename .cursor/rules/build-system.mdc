@@ -1,0 +1,397 @@
+---
+description: Build system and development workflow for SeaSight monorepo
+---
+
+# Build System & Development Workflow
+
+## 🏗️ Monorepo Structure
+
+### Package Organization
+SeaSight uses npm workspaces for monorepo management as defined in [package.json](mdc:package.json):
+
+```json
+{
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@seasight/web",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "build:router": "./scripts/build.sh --router-only",
+    "build:clean": "./scripts/build.sh --clean --install",
+    "build:full": "./scripts/build.sh --clean --install"
+  }
+}
+```
+
+### Workspace Dependencies
+- **`apps/web`** - React PWA frontend
+- **`packages/router-core`** - C++17 router source
+- **`packages/router-wasm`** - WebAssembly build output
+- **`tools/packs-builder`** - Python data processing tools
+
+## 🔧 Build Commands
+
+### Development Commands
+```bash
+# ✅ Start development server (most common)
+npm run dev
+
+# ✅ Build router after C++ changes
+npm run build:router
+
+# ✅ Clean build when things break
+npm run build:clean
+
+# ✅ Complete clean build (first setup)
+npm run build:full
+```
+
+### When to Rebuild
+- **Always**: Router C++ code changes (`packages/router-core/src/*.cpp`)
+- **Sometimes**: Dependency changes, environment changes
+- **Never**: Frontend-only changes (React, TypeScript, CSS)
+
+## 🚀 Router Build Process
+
+### C++ to WebAssembly Compilation
+The router build process is defined in [packages/router-core/src/CMakeLists.txt](mdc:packages/router-core/src/CMakeLists.txt):
+
+```cmake
+# ✅ Set C++17 standard and Emscripten flags
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -s WASM_BIGINT")
+
+# ✅ Configure Emscripten output
+set_target_properties(SeaSightRouter PROPERTIES
+    SUFFIX ".js"
+    LINK_FLAGS "-s NO_EXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORT_NAME=SeaSightRouterModule -s ENVIRONMENT=web,worker -s ALLOW_MEMORY_GROWTH=1 -lembind -pthread -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4"
+)
+```
+
+### Build Script
+The build process is automated in [scripts/build.sh](mdc:scripts/build.sh):
+
+```bash
+#!/bin/bash
+# ✅ Router build script
+
+# Build router with Emscripten
+cd packages/router-core/src
+emcmake cmake .
+emmake make
+
+# Copy output to WASM package
+cp SeaSightRouter.js SeaSightRouter.wasm ../router-wasm/dist/
+cp src/SeaSightRouter.d.ts ../router-wasm/dist/
+cp src/SeaSightRouter.worker.js ../router-wasm/dist/
+cp src/SeaSightRouter.worker.d.ts ../router-wasm/dist/
+```
+
+## 🛠️ Development Environment
+
+### Prerequisites Setup
+```bash
+# ✅ Install Emscripten SDK (first time only)
+npm run setup:emsdk
+
+# ✅ Install all dependencies and build router
+npm run install:all
+```
+
+### Emscripten SDK Configuration
+Emscripten setup is handled by [tools/ci/setup-emsdk.sh](mdc:tools/ci/setup-emsdk.sh):
+
+```bash
+#!/bin/bash
+# ✅ Emscripten SDK setup script
+
+# Download and install Emscripten
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+
+# Set environment variables
+source ./emsdk_env.sh
+```
+
+### Environment Variables
+Required environment variables for development:
+
+```bash
+# ✅ Emscripten environment
+export EMSDK_PATH="/path/to/emsdk"
+export PATH="$EMSDK_PATH:$PATH"
+
+# ✅ Optional API keys for enhanced functionality
+VITE_MAPTILER_KEY=your_maptiler_key
+VITE_AISSTREAM_TOKEN=your_aisstream_token
+VITE_OPENMETEO_API_KEY=your_openmeteo_key
+VITE_SENTRY_DSN=your_sentry_dsn
+```
+
+## 🎯 Frontend Build Configuration
+
+### Vite Configuration
+Frontend build is configured in [apps/web/vite.config.ts](mdc:apps/web/vite.config.ts):
+
+```typescript
+// ✅ Vite configuration with PWA support
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['vite.svg'],
+      manifest: {
+        name: 'SeaSight',
+        short_name: 'SeaSight',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#0b1220',
+        theme_color: '#0b1220'
+      }
+    })
+  ],
+  resolve: {
+    alias: {
+      '@features': resolve(__dirname, './src/features'),
+      '@shared': resolve(__dirname, './src/shared'),
+      '@lib': resolve(__dirname, './src/lib')
+    }
+  },
+  assetsInclude: ['**/*.wasm'],
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
+  }
+});
+```
+
+### TypeScript Configuration
+TypeScript is configured with strict mode in [apps/web/tsconfig.app.json](mdc:apps/web/tsconfig.app.json):
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@features/*": ["./src/features/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@lib/*": ["./src/lib/*"]
+    }
+  }
+}
+```
+
+## 🧪 Testing Configuration
+
+### Test Runner Setup
+Tests are configured with Vitest in [apps/web/vitest.config.ts](mdc:apps/web/vitest.config.ts):
+
+```typescript
+// ✅ Vitest configuration
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/__tests__/setup.ts'],
+    globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: ['node_modules/', 'dist/', '**/*.d.ts']
+    }
+  }
+});
+```
+
+### Test Scripts
+```bash
+# ✅ Run tests
+npm run test
+
+# ✅ Run tests with coverage
+npm run test:coverage
+
+# ✅ Run tests in watch mode
+npm run test:watch
+```
+
+## 🔒 Security Configuration
+
+### WebAssembly Security Headers
+Required headers for WASM shared memory in [vite.config.ts](mdc:apps/web/vite.config.ts):
+
+```typescript
+// ✅ Required for WASM shared memory
+server: {
+  headers: {
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Embedder-Policy': 'require-corp'
+  }
+}
+```
+
+### Content Security Policy
+CSP configuration for production builds:
+
+```typescript
+// ✅ CSP configuration
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'router-wasm': ['@seasight/router-wasm']
+        }
+      }
+    }
+  }
+});
+```
+
+## 📦 Package Management
+
+### Dependency Management
+```bash
+# ✅ Install dependencies for all workspaces
+npm install
+
+# ✅ Install dependency in specific workspace
+npm install --workspace=@seasight/web
+
+# ✅ Add dependency to specific workspace
+npm install --workspace=@seasight/web react-query
+
+# ✅ Update dependencies
+npm update --workspaces
+```
+
+### Workspace Scripts
+```bash
+# ✅ Run script in specific workspace
+npm run dev --workspace=@seasight/web
+
+# ✅ Run script in all workspaces
+npm run build --workspaces
+
+# ✅ Run script in multiple workspaces
+npm run test --workspace=@seasight/web --workspace=@seasight/router-wasm
+```
+
+## 🚀 Deployment Configuration
+
+### Production Build
+```bash
+# ✅ Build for production
+npm run build
+
+# ✅ Preview production build
+npm run preview
+```
+
+### Docker Support
+```dockerfile
+# ✅ Dockerfile for production deployment
+FROM node:18-alpine
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY apps/web/package*.json ./apps/web/
+COPY packages/*/package*.json ./packages/*/
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Expose port
+EXPOSE 3000
+
+# Start application
+CMD ["npm", "run", "preview"]
+```
+
+## 🔧 Troubleshooting
+
+### Common Build Issues
+```bash
+# ✅ "emcmake: command not found"
+source ./emsdk/emsdk_env.sh
+
+# ✅ CSS import errors
+npm run build:clean
+
+# ✅ Router not updating
+npm run build:router
+
+# ✅ WASM load errors
+npm run build:full
+```
+
+### Development Tools
+```bash
+# ✅ Check Emscripten installation
+emcc --version
+
+# ✅ Check Node.js version
+node --version  # Should be 18+
+
+# ✅ Check npm version
+npm --version
+
+# ✅ Check workspace configuration
+npm ls --workspaces
+```
+
+## 📊 Performance Monitoring
+
+### Build Performance
+```bash
+# ✅ Monitor build times
+time npm run build
+
+# ✅ Monitor router build specifically
+time npm run build:router
+
+# ✅ Check bundle sizes
+npm run build:analyze
+```
+
+### Development Performance
+```bash
+# ✅ Monitor dev server startup
+time npm run dev
+
+# ✅ Check memory usage
+npm run dev -- --inspect
+
+# ✅ Profile performance
+npm run dev -- --profile
+```

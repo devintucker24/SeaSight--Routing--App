@@ -15,9 +15,12 @@ export const ROUTER_CONFIG = {
     LON_MAX: 180,
   },
   // The resolution of the routing grid in degrees. Smaller values increase accuracy but also computational cost.
-  GRID_RESOLUTION: 0.5,
+  // ✅ Updated to 0.1° for maritime navigation accuracy (5x improvement from previous 0.5°)
+  GRID_RESOLUTION: 0.1,
   // Distance (in kilometers) used for sampling intermediate points along an edge to check for obstacles or environment changes.
-  EDGE_SAMPLING_KM: 3,
+  // ✅ Updated to 1km for finer hazard detection (3x improvement from previous 3km)
+  // Provides better coastal obstacle detection and safer routing near hazards
+  EDGE_SAMPLING_KM: 1,
   // The assumed base speed (in knots) used for initial path estimations and certain routing calculations.
   NOMINAL_SPEED_KTS: 12,
 } as const;

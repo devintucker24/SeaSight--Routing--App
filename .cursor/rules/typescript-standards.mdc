@@ -1,0 +1,344 @@
+---
+globs: *.ts,*.tsx
+description: TypeScript coding standards and patterns for SeaSight
+---
+
+# TypeScript Coding Standards
+
+## 🎯 Type Safety & Configuration
+
+### Strict TypeScript Configuration
+Follow the strict configuration in [tsconfig.app.json](mdc:apps/web/tsconfig.app.json):
+- **Strict mode enabled** with comprehensive type checking
+- **No implicit any** - all types must be explicit
+- **Strict null checks** - handle null/undefined explicitly
+- **No unused locals/parameters** - clean code enforcement
+
+### Type Definition Patterns
+
+#### Interface Definitions
+```typescript
+// Use PascalCase for interfaces
+export interface Waypoint {
+  lat: number;
+  lon: number;
+  time?: number;
+  headingDeg?: number;
+  isCourseChange?: boolean;
+  maxWaveHeightM?: number;
+  hazardFlags?: number;
+}
+
+// Extend base interfaces for specific use cases
+export interface RouteResponse {
+  waypoints: Waypoint[];
+  diagnostics: Diagnostics;
+  eta: number;
+  totalDistanceNm: number;
+}
+```
+
+#### Type Unions & Literals
+```typescript
+// Use string literal unions for constrained values
+export type MapStyle = 'openfreemap-liberty' | 'dark-maritime';
+export type RoutingMode = 'ASTAR' | 'ISOCHRONE';
+
+// Use const assertions for immutable data
+export const MAP_LAYERS = [
+  { id: 'nautical', icon: '⚓', label: 'Nautical Charts' },
+  { id: 'weather', icon: '🌊', label: 'Weather Data' }
+] as const;
+```
+
+## 🏗️ Import/Export Patterns
+
+### Path Aliases
+Always use the configured path aliases:
+```typescript
+// ✅ Correct - use path aliases
+import { useAppState } from '@shared/hooks/useAppState';
+import MapSimplified from '@features/map/MapSimplified';
+import type { Waypoint } from '@shared/types';
+
+// ❌ Avoid - relative imports
+import { useAppState } from '../../../shared/hooks/useAppState';
+```
+
+### Type-Only Imports
+Use type-only imports for TypeScript types:
+```typescript
+// ✅ Correct - separate type imports
+import type { Waypoint, RouteResponse } from '@shared/types';
+import { normalizeWaypoints } from '@shared/utils';
+
+// ✅ Also correct - inline type import
+import { normalizeWaypoints, type Waypoint } from '@shared/utils';
+```
+
+### Export Patterns
+```typescript
+// ✅ Named exports for utilities
+export const normalizeWaypoints = (waypoints: Waypoint[]): Waypoint[] => {
+  // implementation
+};
+
+// ✅ Default export for components
+export default function MapSimplified({ waypoints, onWaypointAdd }: MapProps) {
+  // component implementation
+}
+
+// ✅ Re-export from index files
+export { useAppState } from './hooks/useAppState';
+export type { Waypoint, RouteResponse } from './types';
+```
+
+## 🎣 Custom Hooks Patterns
+
+### Hook Naming & Structure
+```typescript
+// ✅ Hook naming convention
+export const useAppState = () => {
+  // State declarations
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [route, setRoute] = useState<LatLonPosition[]>([]);
+  
+  // Memoized values
+  const waypointCount = useMemo(() => waypoints.length, [waypoints]);
+  
+  // Callback functions
+  const addWaypoint = useCallback((coords: { lat: number; lon: number }) => {
+    // implementation
+  }, []);
+  
+  // Return object with descriptive names
+  return {
+    waypoints,
+    route,
+    waypointCount,
+    addWaypoint,
+    removeWaypoint: useCallback(/* ... */, []),
+    clearWaypoints: useCallback(/* ... */, [])
+  };
+};
+```
+
+### Hook Return Types
+```typescript
+// ✅ Define explicit return types for complex hooks
+export interface UseRouterReturn {
+  router: RouterWrapper | null;
+  isInitialized: boolean;
+  solveRoute: (waypoints: Waypoint[]) => Promise<RouteResponse>;
+  crossesAntiMeridian: (lon1: number, lon2: number) => Promise<boolean>;
+}
+
+export const useRouter = (): UseRouterReturn => {
+  // implementation
+};
+```
+
+## 🧩 Component Patterns
+
+### Component Props Interface
+```typescript
+// ✅ Define props interface with JSDoc
+interface MapProps {
+  /** Array of waypoints to display on the map */
+  waypoints: Waypoint[];
+  /** Callback when user clicks to add waypoint */
+  onWaypointAdd: (coords: { lat: number; lon: number }) => void;
+  /** Callback when waypoint is removed */
+  onWaypointRemove: (id: string) => void;
+  /** Map style theme */
+  mapStyle?: MapStyle;
+}
+
+// ✅ Use interface for component props
+export default function MapSimplified({ 
+  waypoints, 
+  onWaypointAdd, 
+  onWaypointRemove,
+  mapStyle = 'dark-maritime' 
+}: MapProps) {
+  // component implementation
+}
+```
+
+### Ref Patterns
+```typescript
+// ✅ Define ref interface
+export interface MapRef {
+  /** Get current map center */
+  getCenter: () => { lat: number; lon: number };
+  /** Set map center */
+  setCenter: (center: { lat: number; lon: number }) => void;
+  /** Fit map to waypoints */
+  fitToWaypoints: (waypoints: Waypoint[]) => void;
+}
+
+// ✅ Use forwardRef for ref forwarding
+export default forwardRef<MapRef, MapProps>(function MapSimplified(props, ref) {
+  // implementation
+});
+```
+
+## 🛠️ Error Handling Patterns
+
+### Custom Error Classes
+```typescript
+// ✅ Extend base Error class
+export class SeaSightError extends Error {
+  public code: string;
+  public context?: Record<string, unknown>;
+  
+  constructor(
+    message: string,
+    code: string,
+    context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'SeaSightError';
+    this.code = code;
+    this.context = context;
+  }
+}
+
+// ✅ Specific error types
+export class RouterError extends SeaSightError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'ROUTER_ERROR', context);
+  }
+}
+```
+
+### Error Handling in Functions
+```typescript
+// ✅ Use Result pattern for operations that can fail
+export type Result<T, E = Error> = 
+  | { success: true; data: T }
+  | { success: false; error: E };
+
+export const validateWaypoint = (waypoint: unknown): Result<Waypoint, RouterError> => {
+  try {
+    // validation logic
+    return { success: true, data: validatedWaypoint };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: new RouterError('Invalid waypoint', { waypoint, error }) 
+    };
+  }
+};
+```
+
+## 📊 Utility Function Patterns
+
+### Pure Functions
+```typescript
+// ✅ Pure functions with explicit types
+export const normalizeWaypoints = (waypoints: Waypoint[]): Waypoint[] => {
+  return waypoints.map(waypoint => ({
+    ...waypoint,
+    lat: Math.max(-90, Math.min(90, waypoint.lat)),
+    lon: ((waypoint.lon % 360) + 360) % 360
+  }));
+};
+
+// ✅ Use const assertions for immutable data
+export const createWaypoint = (coords: { lat: number; lon: number }): Waypoint => ({
+  lat: coords.lat,
+  lon: coords.lon,
+  time: Date.now() / 1000,
+  isCourseChange: false
+}) as const;
+```
+
+### Generic Utilities
+```typescript
+// ✅ Use generics for reusable utilities
+export const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  delay: number
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+```
+
+## 🧪 Testing Patterns
+
+### Test File Organization
+```typescript
+// ✅ Test file naming: ComponentName.test.tsx
+// ✅ Co-locate tests with components
+describe('MapSimplified', () => {
+  it('should render waypoints correctly', () => {
+    const waypoints: Waypoint[] = [
+      { lat: 40.7128, lon: -74.0060 },
+      { lat: 34.0522, lon: -118.2437 }
+    ];
+    
+    render(<MapSimplified waypoints={waypoints} onWaypointAdd={vi.fn()} />);
+    
+    // assertions
+  });
+});
+```
+
+### Mock Patterns
+```typescript
+// ✅ Mock external dependencies
+vi.mock('@features/route-planner/services/RouterService', () => ({
+  RouterService: {
+    solveRoute: vi.fn().mockResolvedValue({
+      waypoints: [],
+      diagnostics: { totalDistanceNm: 100 }
+    })
+  }
+}));
+```
+
+## 📝 Documentation Standards
+
+### JSDoc Comments
+```typescript
+/**
+ * Normalizes waypoint coordinates to valid ranges
+ * 
+ * @param waypoints - Array of waypoints to normalize
+ * @returns Array of normalized waypoints with valid coordinates
+ * @throws {RouterError} When waypoint coordinates are invalid
+ * 
+ * @example
+ * ```typescript
+ * const normalized = normalizeWaypoints([
+ *   { lat: 91, lon: -200 }, // Invalid coordinates
+ *   { lat: 40.7128, lon: -74.0060 } // Valid coordinates
+ * ]);
+ * // Returns: [{ lat: 90, lon: 160 }, { lat: 40.7128, lon: -74.0060 }]
+ * ```
+ */
+export const normalizeWaypoints = (waypoints: Waypoint[]): Waypoint[] => {
+  // implementation
+};
+```
+
+### Inline Comments
+```typescript
+// ✅ Use section dividers for organization
+// ============================================================================
+// Waypoint Management Functions
+// ============================================================================
+
+// ✅ Explain complex logic
+// Convert grid coordinates to lat/lon using the router's grid system
+const latLon = router.gridToLatLon(gridI, gridJ);
+
+// ✅ Maritime terminology
+// Check if route crosses the International Date Line (anti-meridian)
+const crossesDateLine = router.crossesAntiMeridian(startLon, endLon);
+```

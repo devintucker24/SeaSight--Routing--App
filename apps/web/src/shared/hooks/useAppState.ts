@@ -6,7 +6,6 @@ import type {
   LatLonPosition, 
   MapStyle, 
   RoutingMode, 
-  IsochroneOptions,
   MapLayer,
   RouteResponse 
 } from '../types';
@@ -16,7 +15,7 @@ import {
   generateRouteKey,
   createMapLayer 
 } from '../utils';
-import { DEFAULT_ISOCHRONE_OPTIONS, MAP_LAYERS } from '../constants';
+import { MAP_LAYERS } from '../constants';
 
 // ============================================================================
 // Main App State Hook
@@ -36,7 +35,10 @@ export const useAppState = () => {
   const [showOpenSeaMap, setShowOpenSeaMap] = useState(true);
   
   // Routing state
-  const [routingMode, setRoutingMode] = useState<RoutingMode>('ASTAR');
+  // ✅ ACCURACY ENHANCEMENT: Isochrone mode provides continuous coordinate accuracy
+  // Isochrone: sub-mile precision without grid snapping (professional maritime standard)
+  // A*: faster but limited by grid resolution (legacy fallback)
+  const [routingMode, setRoutingMode] = useState<RoutingMode>('ISOCHRONE');
   
   // Layer state
   const [layers, setLayers] = useState<MapLayer[]>(() =>
@@ -99,6 +101,13 @@ export const useAppState = () => {
     setRouteResult(result);
     if (result && result.waypoints) {
       const coords = result.waypoints.map(({ lat, lon }) => ({ lat, lon }));
+      
+      // Ensure route starts and ends at the EXACT user-selected waypoints
+      if (waypoints.length >= 2 && coords.length >= 2) {
+        coords[0] = { lat: waypoints[0].lat, lon: waypoints[0].lon };
+        coords[coords.length - 1] = { lat: waypoints[waypoints.length - 1].lat, lon: waypoints[waypoints.length - 1].lon };
+      }
+      
       setRoute(coords);
       if (waypoints.length >= 2) {
         const start = waypoints[0];
