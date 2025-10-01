@@ -214,7 +214,7 @@
         "line-opacity": ["match", ["get", "brunnel"], "tunnel", 0.5, 1],
         "line-width": [
           "interpolate",
-          ["linear", 2],
+          ["linear"],
           ["zoom"],
           4,
           0.5,
@@ -360,7 +360,7 @@
         "line-opacity": ["match", ["get", "brunnel"], "tunnel", 0.25, 1],
         "line-width": [
           "interpolate",
-          ["linear", 1],
+          ["linear"],
           ["zoom"],
           9,
           ["match", ["get", "service"], ["yard", "spur"], 0, 0.5],
@@ -409,7 +409,7 @@
         "line-opacity": 1,
         "line-width": [
           "interpolate",
-          ["linear", 2],
+          ["linear"],
           ["zoom"],
           10,
           ["match", ["get", "class"], ["runway"], 1, ["taxiway"], 0.5, 0],
@@ -620,7 +620,7 @@
         "text-max-width": 10,
         "text-size": [
           "interpolate",
-          ["linear", 1],
+          ["linear"],
           ["zoom"],
           3,
           11,
@@ -693,7 +693,7 @@
         "text-max-width": 10,
         "text-size": [
           "interpolate",
-          ["linear", 1],
+          ["linear"],
           ["zoom"],
           3,
           11,
@@ -734,7 +734,7 @@
         },
         "text-size": [
           "interpolate",
-          ["linear", 1],
+          ["linear"],
           ["zoom"],
           0,
           8,

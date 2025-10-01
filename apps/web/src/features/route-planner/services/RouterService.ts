@@ -186,20 +186,20 @@ class RouterService {
 
   private createWorkerPromise(worker: Worker, type: string, payload: any, transferable?: Transferable[]): Promise<any> {
     const id = this.getNextMessageId();
-    console.log('🔧 [ROUTER SERVICE] createWorkerPromise called:', { type, id, hasWorker: !!worker });
+    // // console.log('🔧 [ROUTER SERVICE] createWorkerPromise called:', { type, id, hasWorker: !!worker });
     
     return new Promise((resolve, reject) => {
       this.pendingWorkerPromises.set(id, { resolve, reject });
       
       try {
         if (transferable) {
-          console.log('🔧 [ROUTER SERVICE] Sending message with transferable:', { type, id });
+          // // console.log('🔧 [ROUTER SERVICE] Sending message with transferable:', { type, id });
           worker.postMessage({ type, payload, id }, transferable);
         } else {
-          console.log('🔧 [ROUTER SERVICE] Sending message without transferable:', { type, id });
+          // // console.log('🔧 [ROUTER SERVICE] Sending message without transferable:', { type, id });
           worker.postMessage({ type, payload, id });
         }
-        console.log('🔧 [ROUTER SERVICE] Message sent successfully');
+        // // console.log('🔧 [ROUTER SERVICE] Message sent successfully');
       } catch (error) {
         console.error('🔧 [ROUTER SERVICE] Failed to send message to worker:', error);
         reject(error);
@@ -209,15 +209,15 @@ class RouterService {
 
   private handlePackWorkerMessage(event: MessageEvent): void {
     const { type, payload, id } = event.data;
-    console.log('🔧 [ROUTER SERVICE] Pack worker message received:', { type, id, hasPayload: !!payload });
+    // // console.log('🔧 [ROUTER SERVICE] Pack worker message received:', { type, id, hasPayload: !!payload });
     
     const promiseHandlers = this.pendingWorkerPromises.get(id);
     if (promiseHandlers) {
-      console.log('🔧 [ROUTER SERVICE] Found promise handlers for pack worker message:', id);
+      // // console.log('🔧 [ROUTER SERVICE] Found promise handlers for pack worker message:', id);
       this.pendingWorkerPromises.delete(id);
       if (type === 'PACK_LOADED') {
         this.packWorkerReady = payload.success;
-        console.log('🔧 [ROUTER SERVICE] Pack loaded, packWorkerReady set to:', this.packWorkerReady);
+        // console.log('🔧 [ROUTER SERVICE] Pack loaded, packWorkerReady set to:', this.packWorkerReady);
         promiseHandlers.resolve(payload);
       } else if (type === 'ERROR') {
         console.error('🔧 [ROUTER SERVICE] Pack worker error:', payload);
@@ -232,11 +232,11 @@ class RouterService {
 
   private handleRouterWorkerMessage(event: MessageEvent): void {
     const { type, payload, id } = event.data;
-    console.log('🔧 [ROUTER SERVICE] Router worker message received:', { type, id, hasPayload: !!payload });
+    // // console.log('🔧 [ROUTER SERVICE] Router worker message received:', { type, id, hasPayload: !!payload });
     
     const promiseHandlers = this.pendingWorkerPromises.get(id);
     if (promiseHandlers) {
-      console.log('🔧 [ROUTER SERVICE] Found promise handlers for router worker message:', id);
+      // // console.log('🔧 [ROUTER SERVICE] Found promise handlers for router worker message:', id);
       this.pendingWorkerPromises.delete(id);
       if (
         type === 'GRID_TO_LATLON_RESULT' ||
@@ -246,13 +246,13 @@ class RouterService {
         type === 'CROSSES_ANTI_MERIDIAN_RESULT' ||
         type === 'CREATE_EDGE_RESULT'
       ) {
-        console.log('🔧 [ROUTER SERVICE] Resolving utility function result:', type);
+        // // console.log('🔧 [ROUTER SERVICE] Resolving utility function result:', type);
         promiseHandlers.resolve(payload);
       } else if (type === 'ROUTE_SOLVED') {
-        console.log('🔧 [ROUTER SERVICE] Route solved, resolving promise');
+        // // console.log('🔧 [ROUTER SERVICE] Route solved, resolving promise');
         promiseHandlers.resolve(payload);
       } else if (type === 'ROUTER_INITIALIZED') {
-        console.log('🔧 [ROUTER SERVICE] Router initialized, resolving promise');
+        // console.log('🔧 [ROUTER SERVICE] Router initialized, resolving promise');
         promiseHandlers.resolve(payload);
       } else if (type === 'ERROR') {
         console.error('🔧 [ROUTER SERVICE] Router worker error:', payload);
@@ -266,35 +266,35 @@ class RouterService {
   }
 
   async initialize(config: RouterConfig): Promise<void> {
-    console.log('🔧 [ROUTER SERVICE] initialize() called with config:', config);
-    console.log('🔧 [ROUTER SERVICE] Current state - isInitialized:', this.isInitialized);
+    // console.log('🔧 [ROUTER SERVICE] initialize() called with config:', config);
+    // console.log('🔧 [ROUTER SERVICE] Current state - isInitialized:', this.isInitialized);
     
     if (this.isInitialized) {
-      console.log('🔧 [ROUTER SERVICE] Already initialized; skipping.');
+      // console.log('🔧 [ROUTER SERVICE] Already initialized; skipping.');
       return;
     }
 
     // If an initialization is already in progress, await it
     if (this.initializationPromise) {
-      console.log('🔧 [ROUTER SERVICE] Initialization already in progress, waiting...');
+      // console.log('🔧 [ROUTER SERVICE] Initialization already in progress, waiting...');
       await this.initializationPromise;
       return;
     }
 
-    console.log('🔧 [ROUTER SERVICE] Starting initialization promise...');
+    // console.log('🔧 [ROUTER SERVICE] Starting initialization promise...');
     this.initializationPromise = (async () => {
       try {
-        console.log('🔧 [ROUTER SERVICE] Inside initialization promise');
+        // console.log('🔧 [ROUTER SERVICE] Inside initialization promise');
         
         // Initialize Pack Worker
         const packLoadOptions: EnvironmentSamplerOptions = { defaultWaveHeight: 1.0, defaultDepth: 5000 };
         let packData: PackData;
         
         try {
-          console.log('🔧 [ROUTER SERVICE] Attempting to load pack from /packs/NATL_050_test');
+          // console.log('🔧 [ROUTER SERVICE] Attempting to load pack from /packs/NATL_050_test');
           const packLoadResult = await this.createWorkerPromise(this.packWorker, 'LOAD_PACK', { basePath: '/packs/NATL_050_test', options: packLoadOptions });
           packData = packLoadResult.packData;
-          console.log('🔧 [ROUTER SERVICE] Pack loaded successfully');
+          // console.log('🔧 [ROUTER SERVICE] Pack loaded successfully');
         } catch (packError) {
           console.warn('🔧 [ROUTER SERVICE] Pack loading failed, creating minimal pack data:', packError);
           // Create a minimal pack data structure
@@ -314,37 +314,37 @@ class RouterService {
             masks: {},
             buffers: {}
           };
-          console.log('🔧 [ROUTER SERVICE] Minimal pack data created:', packData);
+          // console.log('🔧 [ROUTER SERVICE] Minimal pack data created:', packData);
         }
 
         // Initialize Router Worker, passing the loaded packData (which contains SharedArrayBuffers)
         if (this.routerWorker) {
-          console.log('🔧 [ROUTER SERVICE] Initializing router worker...');
+          // console.log('🔧 [ROUTER SERVICE] Initializing router worker...');
           await this.createWorkerPromise(this.routerWorker, 'INITIALIZE', { config, packData, packLoadOptions });
-          console.log('🔧 [ROUTER SERVICE] Router worker initialized');
+          // console.log('🔧 [ROUTER SERVICE] Router worker initialized');
         } else {
-          console.log('🔧 [ROUTER SERVICE] Router worker not available, using fallback mode');
+          // console.log('🔧 [ROUTER SERVICE] Router worker not available, using fallback mode');
         }
 
-        console.log('🔧 [ROUTER SERVICE] Setting isInitialized to true...');
+        // console.log('🔧 [ROUTER SERVICE] Setting isInitialized to true...');
         this.isInitialized = true;
-        console.log('🔧 [ROUTER SERVICE] Router service and workers initialized successfully');
+        // console.log('🔧 [ROUTER SERVICE] Router service and workers initialized successfully');
       } catch (error) {
         console.error('🔧 [ROUTER SERVICE] Failed to initialize router service:', error);
         console.error('🔧 [ROUTER SERVICE] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         throw error;
       } finally {
-        console.log('🔧 [ROUTER SERVICE] Clearing initialization promise...');
+        // console.log('🔧 [ROUTER SERVICE] Clearing initialization promise...');
         this.initializationPromise = null;
       }
     })();
 
     try {
-      console.log('🔧 [ROUTER SERVICE] Awaiting initialization promise...');
+      // console.log('🔧 [ROUTER SERVICE] Awaiting initialization promise...');
       await this.initializationPromise;
-      console.log('🔧 [ROUTER SERVICE] Initialization promise completed');
+      // console.log('🔧 [ROUTER SERVICE] Initialization promise completed');
     } finally {
-      console.log('🔧 [ROUTER SERVICE] Final cleanup - clearing initialization promise');
+      // console.log('🔧 [ROUTER SERVICE] Final cleanup - clearing initialization promise');
       this.initializationPromise = null;
     }
   }
@@ -382,29 +382,29 @@ class RouterService {
     startTimeHours: number,
     options: SolveRouteOptions = {},
   ): Promise<RouteResponse> {
-    console.log('🔧 [ROUTER SERVICE] solveRoute called', {
-      startLatGrid, startLonGrid, goalLatGrid, goalLonGrid, startTimeHours, options,
-      hasRouterWorker: !!this.routerWorker,
-      isInitialized: this.isInitialized
-    });
+    // console.log('🔧 [ROUTER SERVICE] solveRoute called', {
+    //   startLatGrid, startLonGrid, goalLatGrid, goalLonGrid, startTimeHours, options,
+    //   hasRouterWorker: !!this.routerWorker,
+    //   isInitialized: this.isInitialized
+    // });
     
     this.ensureInitialized();
     
     // Check if router worker is available
     if (this.routerWorker) {
-      console.log('🔧 [ROUTER SERVICE] Using router worker');
+      // // console.log('🔧 [ROUTER SERVICE] Using router worker');
       try {
         const response: RouteResponse = await this.createWorkerPromise(this.routerWorker, 'SOLVE_ROUTE', {
           startLatGrid, startLonGrid, goalLatGrid, goalLonGrid, startTimeHours, options
         });
-        console.log('🔧 [ROUTER SERVICE] Router worker returned:', response);
+        // // console.log('🔧 [ROUTER SERVICE] Router worker returned:', response);
         return response;
       } catch (error) {
         console.error('🔧 [ROUTER SERVICE] Router worker failed:', error);
         throw error;
       }
     } else {
-      console.log('🔧 [ROUTER SERVICE] Using fallback straight-line route solver');
+      // console.log('🔧 [ROUTER SERVICE] Using fallback straight-line route solver');
       
       const start = this.gridToLatLonSync(startLatGrid, startLonGrid);
       const goal = this.gridToLatLonSync(goalLatGrid, goalLonGrid);

@@ -7,7 +7,6 @@ import SlidePanel from '@shared/ui/SlidePanel'
 import LayerToggles from '@features/map/LayerToggles'
 import StatusLedger from '@shared/ui/StatusLedger'
 // import ActionDock from '@shared/ui/ActionDock'
-import type { RouteResponse } from '@shared/types'
 import { useAppState } from '@shared/hooks/useAppState'
 import { formatDuration, formatEta, formatDistance } from '@shared/utils'
 import { debugRouter } from '@shared/dev'
@@ -45,10 +44,6 @@ function App() {
 
   const mapRef = useRef<MapRef>(null)
 
-  const handleMapClick = (lngLat: [number, number]) => {
-    addWaypoint({ lat: lngLat[1], lon: lngLat[0] })
-  }
-
   const handleWaypointAdd = (coords: { lat: number; lon: number }) => {
     addWaypoint(coords)
   }
@@ -58,7 +53,7 @@ function App() {
   }
 
   const runRouteSolve = useCallback(async () => {
-    console.log('🔍 [ROUTE] Attempting solve with', waypoints.length, 'waypoints');
+    // console.log('🔍 [ROUTE] Attempting solve with', waypoints.length, 'waypoints');
     
     if (!mapRef.current || waypoints.length < 2) {
       console.log('❌ [ROUTE] Blocked: need 2+ waypoints, have', waypoints.length);
@@ -86,9 +81,9 @@ function App() {
   }, [recordSolveAttempt, routingMode, waypoints])
 
   useEffect(() => {
-    console.log('🎯 [ROUTE] useEffect - waypoints:', waypoints.length);
+    // console.log('🎯 [ROUTE] useEffect - waypoints:', waypoints.length);
     if (waypoints.length === 2) {
-      console.log('▶️  [ROUTE] Triggering solve for 2 waypoints');
+      // console.log('▶️  [ROUTE] Triggering solve for 2 waypoints');
       void runRouteSolve();
     } else if (waypoints.length > 2) {
       void runRouteSolve();
@@ -136,14 +131,11 @@ function App() {
     }
   }
 
-  const handleRouteSolvedWithMap = (result: RouteResponse | null) => {
-    handleRouteSolved(result)
-  }
 
   useEffect(() => {
-    console.log('🎯 [ROUTE] useEffect - waypoints:', waypoints.length);
+    // console.log('🎯 [ROUTE] useEffect - waypoints:', waypoints.length);
     if (waypoints.length === 2) {
-      console.log('▶️  [ROUTE] Triggering solve for 2 waypoints');
+      // console.log('▶️  [ROUTE] Triggering solve for 2 waypoints');
       const start = waypoints[0]
       const destination = waypoints[1]
       const key = `${start.lat.toFixed(4)},${start.lon.toFixed(4)}|${destination.lat.toFixed(4)},${destination.lon.toFixed(4)}`
@@ -171,15 +163,10 @@ function App() {
         ref={mapRef}
         waypoints={mapWaypoints}
         route={route}
-        onMapClick={handleMapClick}
+        routeResult={routeResult}
         onWaypointAdd={(point) => addWaypoint(point)}
-        onRouteSolved={handleRouteSolvedWithMap}
-        onClearRoute={() => {
-          clearRoute()
-        }}
+        onRouteCalculated={handleRouteSolved}
         routingMode={routingMode}
-        mapStyle={mapStyle}
-        showOpenSeaMap={showOpenSeaMap}
       />
 
       {/* Clear Waypoints Button - repositioned as top dropdown */}

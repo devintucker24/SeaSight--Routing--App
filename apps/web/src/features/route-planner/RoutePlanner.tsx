@@ -62,6 +62,9 @@ const RoutePlanner = ({ waypoints, routeResult, onWaypointAdd, onWaypointRemove,
     <div style={{
       color: 'var(--white)',
       padding: '0',
+      height: '100%',
+      overflowY: 'auto',
+      overflowX: 'hidden',
       minWidth: '300px'
     }}>
       <h3 style={{ 

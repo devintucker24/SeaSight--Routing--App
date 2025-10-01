@@ -78,15 +78,15 @@ function solveRoute(
   startTimeHours: number,
   options: SolveRouteOptions
 ): RouteResponse {
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('🚢 [ROUTE SOLVER] Starting route calculation');
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('📍 Start Grid:', { i: startLatGrid, j: startLonGrid });
-  console.log('📍 Goal Grid:', { i: goalLatGrid, j: goalLonGrid });
-  console.log('⏰ Start Time:', startTimeHours, 'hours');
-  console.log('⚙️  Options:', options);
-  console.log('🤖 Router Instance Available:', !!routerInstance);
-  console.log('═══════════════════════════════════════════════════════');
+  // console.log('═══════════════════════════════════════════════════════');
+  // console.log('🚢 [ROUTE SOLVER] Starting route calculation');
+  // console.log('═══════════════════════════════════════════════════════');
+  // console.log('📍 Start Grid:', { i: startLatGrid, j: startLonGrid });
+  // console.log('📍 Goal Grid:', { i: goalLatGrid, j: goalLonGrid });
+  // console.log('⏰ Start Time:', startTimeHours, 'hours');
+  // console.log('⚙️  Options:', options);
+  // console.log('🤖 Router Instance Available:', !!routerInstance);
+  // console.log('═══════════════════════════════════════════════════════');
   
   if (!routerInstance) {
     console.error('❌ [ROUTE SOLVER] Router instance not available');
@@ -95,12 +95,12 @@ function solveRoute(
   }
 
   if (options.mode === 'ISOCHRONE') {
-    console.log('🌊 [ROUTE SOLVER] Using ISOCHRONE mode');
+    // console.log('🌊 [ROUTE SOLVER] Using ISOCHRONE mode');
     
-    // Convert grid indices to geographic coordinates
-    // Converting grid to lat/lon...
-    const startLatLon = routerInstance.gridToLatLon(startLatGrid, startLonGrid);
-    const goalLatLon = routerInstance.gridToLatLon(goalLatGrid, goalLonGrid);
+    // ✅ USE EXACT COORDINATES - Preserve user's clicked points for maritime accuracy
+    // Use exact coordinates from options if available, otherwise fall back to grid conversion
+    const startLatLon = options.start || routerInstance.gridToLatLon(startLatGrid, startLonGrid);
+    const goalLatLon = options.goal || routerInstance.gridToLatLon(goalLatGrid, goalLonGrid);
     
     // Get isochrone options with defaults
     const isoOpts = options.isochrone;
@@ -113,11 +113,11 @@ function solveRoute(
     
     const request = {
       start: {
-        lat: startLatLon.lat,
+        lat: startLatLon.lat,  // ✅ EXACT user-clicked coordinate
         lon: startLatLon.lon
       },
       destination: {
-        lat: goalLatLon.lat,
+        lat: goalLatLon.lat,   // ✅ EXACT user-clicked coordinate
         lon: goalLatLon.lon
       },
       departureTimeHours: startTimeHours,
@@ -140,7 +140,7 @@ function solveRoute(
     const diagnostics = result.diagnostics || {};
     const etaHours = diagnostics.etaHours || 0;
 
-    console.log('✅ [ROUTE SOLVER] Isochrone route calculated');
+    // console.log('✅ [ROUTE SOLVER] Isochrone route calculated');
     console.log('   Total waypoints:', waypoints.length);
     console.log('   ETA:', etaHours, 'hours');
     console.log('   Distance:', diagnostics.totalDistanceNm, 'nm');
@@ -158,12 +158,12 @@ function solveRoute(
 
     if (!result || !Array.isArray(result) || result.length === 0) {
       console.warn('⚠️  [ROUTE SOLVER] A* returned empty result, using straight line');
-      // Convert grid to lat/lon for fallback
-      const startLatLon = routerInstance.gridToLatLon(startLatGrid, startLonGrid);
-      const goalLatLon = routerInstance.gridToLatLon(goalLatGrid, goalLonGrid);
+      // ✅ USE EXACT COORDINATES for fallback straight-line route
+      const startLatLon = options.start || routerInstance.gridToLatLon(startLatGrid, startLonGrid);
+      const goalLatLon = options.goal || routerInstance.gridToLatLon(goalLatGrid, goalLonGrid);
       const waypoints = [
-        { lat: startLatLon.lat, lon: startLatLon.lon },
-        { lat: goalLatLon.lat, lon: goalLatLon.lon }
+        { lat: startLatLon.lat, lon: startLatLon.lon },  // ✅ EXACT user-clicked start
+        { lat: goalLatLon.lat, lon: goalLatLon.lon }      // ✅ EXACT user-clicked goal
       ];
       
       return {
@@ -192,6 +192,16 @@ function solveRoute(
       return { lat: latLon.lat, lon: latLon.lon };
     });
 
+    // ✅ CRITICAL: Replace first and last waypoints with EXACT user-clicked coordinates
+    // This ensures the route line visually connects to the exact points the user selected
+    // Eliminates ±15nm endpoint error from grid snapping
+    if (options.start && waypoints.length > 0) {
+      waypoints[0] = { lat: options.start.lat, lon: options.start.lon };
+    }
+    if (options.goal && waypoints.length > 1) {
+      waypoints[waypoints.length - 1] = { lat: options.goal.lat, lon: options.goal.lon };
+    }
+
     const diagnostics = {
       totalDistanceNm: result.reduce((sum: number, node: any) => sum + (node.distToGoalNm || 0), 0),
       averageSpeedKts: 10,
@@ -211,26 +221,26 @@ function solveRoute(
       diagnostics,
     };
     
-    console.log('✅ [ROUTE SOLVER] A* result:', result_response);
-    console.log('═══════════════════════════════════════════════════════');
+    // console.log('✅ [ROUTE SOLVER] A* result:', result_response);
+    // console.log('═══════════════════════════════════════════════════════');
     return result_response;
   }
 }
 
 self.onmessage = async (event: MessageEvent) => {
   const { type, payload, id } = event.data;
-  console.log('📨 [Router Worker] Received message:', { type, id, payload: payload ? Object.keys(payload) : 'no payload' });
+  // console.log('📨 [Router Worker] Received message:', { type, id, payload: payload ? Object.keys(payload) : 'no payload' });
 
   try {
     if (type === 'INITIALIZE') {
       const { config, packData, packLoadOptions } = payload;
-      console.log('🔧 [Router Worker] INITIALIZE message');
+      // console.log('🔧 [Router Worker] INITIALIZE message');
       await initializeRouter(config, packData, packLoadOptions);
       self.postMessage({ type: 'ROUTER_INITIALIZED', payload: { success: true }, id });
       console.log('✅ [Router Worker] Sent ROUTER_INITIALIZED response');
     } else if (type === 'SOLVE_ROUTE') {
-      console.log('🚢 [Router Worker] SOLVE_ROUTE message');
-      console.log('   Payload:', payload);
+      // console.log('🚢 [Router Worker] SOLVE_ROUTE message');
+      // console.log('   Payload:', payload);
       const result = solveRoute(
         payload.startLatGrid,
         payload.startLonGrid,
@@ -245,7 +255,7 @@ self.onmessage = async (event: MessageEvent) => {
       });
       self.postMessage({ type: 'ROUTE_SOLVED', payload: result, id });
     } else if (type === 'SET_SAFETY_CAPS') {
-      console.log('⚙️  [Router Worker] SET_SAFETY_CAPS message');
+      // // console.log('⚙️  [Router Worker] SET_SAFETY_CAPS message');
       if (routerInstance) {
         routerInstance.setSafetyCaps(payload.maxWaveHeight, payload.maxHeadingChange, payload.minWaterDepth);
         console.log('✅ Safety caps set:', payload);
@@ -264,21 +274,21 @@ self.onmessage = async (event: MessageEvent) => {
       console.log('🌐 [Router Worker] GRID_TO_LATLON:', { i: payload.i, j: payload.j });
       if (routerInstance) {
         const result = routerInstance.gridToLatLon(payload.i, payload.j);
-        console.log('   Result:', result);
+        // console.log('   Result:', result);
         self.postMessage({ type: 'GRID_TO_LATLON_RESULT', payload: result, id });
       }
     } else if (type === 'LATLON_TO_GRID') {
-      console.log('🌐 [Router Worker] LATLON_TO_GRID:', { lat: payload.lat, lon: payload.lon });
+      // console.log('🌐 [Router Worker] LATLON_TO_GRID:', { lat: payload.lat, lon: payload.lon });
       if (routerInstance) {
         const result = routerInstance.latLonToGrid(payload.lat, payload.lon);
-        console.log('   Result:', result);
+        // console.log('   Result:', result);
         self.postMessage({ type: 'LATLON_TO_GRID_RESULT', payload: result, id });
       } else {
         console.error('❌ Router instance not available for LATLON_TO_GRID');
         self.postMessage({ type: 'ERROR', payload: 'Router not initialized', id });
       }
     } else if (type === 'GREAT_CIRCLE_DISTANCE') {
-      console.log('📏 [Router Worker] GREAT_CIRCLE_DISTANCE');
+      // console.log('📏 [Router Worker] GREAT_CIRCLE_DISTANCE');
       if (routerInstance) {
         const result = routerInstance.greatCircleDistance(payload.lat1, payload.lon1, payload.lat2, payload.lon2);
         self.postMessage({ type: 'GREAT_CIRCLE_DISTANCE_RESULT', payload: result, id });

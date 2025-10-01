@@ -32,41 +32,41 @@ export const useRouter = (): UseRouterReturn => {
   const pendingSafetyCapsRef = useRef<SafetyCaps | null>(null);
 
   const initializeRouter = useCallback(async (config: RouterConfig) => {
-    console.log('🔧 [USE ROUTER] Starting initialization with config:', config);
-    console.log('🔧 [USE ROUTER] Current state - isLoading:', isLoading, 'isInitialized:', isInitialized);
+    // console.log('🔧 [USE ROUTER] Starting initialization with config:', config);
+    // console.log('🔧 [USE ROUTER] Current state - isLoading:', isLoading, 'isInitialized:', isInitialized);
     
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log('🔧 [USE ROUTER] Calling routerService.initialize...');
+      // console.log('🔧 [USE ROUTER] Calling routerService.initialize...');
       await routerService.initialize(config);
-      console.log('🔧 [USE ROUTER] routerService.initialize completed');
+      // console.log('🔧 [USE ROUTER] routerService.initialize completed');
       
-      console.log('🔧 [USE ROUTER] Setting isInitialized to true...');
+      // console.log('🔧 [USE ROUTER] Setting isInitialized to true...');
       setIsInitialized(true);
-      console.log('🔧 [USE ROUTER] isInitialized set to true');
+      // console.log('🔧 [USE ROUTER] isInitialized set to true');
 
       // Apply any pending safety caps queued before initialization completed
       if (pendingSafetyCapsRef.current) {
         try {
           routerService.setSafetyCaps(pendingSafetyCapsRef.current);
-          console.log('🔧 [USE ROUTER] Applied pending safety caps');
+          // console.log('🔧 [USE ROUTER] Applied pending safety caps');
         } finally {
           pendingSafetyCapsRef.current = null;
         }
       }
       
-      console.log('🔧 [USE ROUTER] Router initialization completed successfully');
+      // console.log('🔧 [USE ROUTER] Router initialization completed successfully');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize router';
       setError(errorMessage);
       console.error('🔧 [USE ROUTER] Router initialization error:', err);
       console.error('🔧 [USE ROUTER] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
     } finally {
-      console.log('🔧 [USE ROUTER] Setting isLoading to false...');
+      // console.log('🔧 [USE ROUTER] Setting isLoading to false...');
       setIsLoading(false);
-      console.log('🔧 [USE ROUTER] Final state - isLoading:', false, 'isInitialized:', isInitialized);
+      // console.log('🔧 [USE ROUTER] Final state - isLoading:', false, 'isInitialized:', isInitialized);
     }
   }, []);
 
